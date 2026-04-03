@@ -183,6 +183,26 @@ function readTranscript(relPath: string): string {
   return fs.readFileSync(full, 'utf8');
 }
 
+interface SourceVideo {
+  code: string;   // e.g. "W1_L2"
+  file: string;   // relative path in transcripts/
+  url: string;    // YouTube URL
+}
+
+/** Extract video code from transcript header, e.g. "# W1_L2: Matrices" → "W1_L2" */
+function extractVideoCode(relPath: string, content: string): string {
+  const headerMatch = content.match(/^# ([^:\n]+):/m);
+  if (headerMatch) return headerMatch[1].trim();
+  // Fallback: first two underscore-separated parts of basename
+  return path.basename(relPath, '.md').split('_').slice(0, 2).join('_');
+}
+
+/** Extract YouTube URL from transcript header */
+function extractYouTubeUrl(content: string): string | null {
+  const match = content.match(/\*\*YouTube URL:\*\*\s*(https?:\/\/[^\s]+)/);
+  return match ? match[1].trim() : null;
+}
+
 function readExistingNoteTOC(noteFile: string): string {
   const full = path.join(NOTES_DIR, `${noteFile}.md`);
   if (!fs.existsSync(full)) return `[[${noteFile}]] (not yet written)`;
@@ -201,7 +221,11 @@ function delay(ms: number): Promise<void> {
 
 // ── Core Prompt ──────────────────────────────────────────────────────────────
 
-function buildPrompt(target: SynthesisTarget, transcripts: string, crossRefContext: string): string {
+function buildPrompt(target: SynthesisTarget, transcripts: string, crossRefContext: string, sourceVideos: SourceVideo[]): string {
+  const videoTable = sourceVideos.map(v =>
+    `| ${v.code} | ${v.url} |`
+  ).join('\n');
+
   return `You are writing professional mathematics study notes for a university linear algebra and multivariable calculus course. These notes are used by students alongside lecture videos.
 
 ## Your Task
@@ -272,27 +296,67 @@ $$\\begin{cases} a_{11}x_1 + a_{12}x_2 = b_1 \\\\ a_{21}x_1 + a_{22}x_2 = b_2 \\
 - **Forward references**: use "Deeper treatment in [[filename]]" rather than repeating content
 - **No week references**: do not say "in week 5 we learned..." — this is topic-based, not week-based
 
+### Video Timestamp Links (IMPORTANT)
+
+The source transcripts come from these YouTube videos:
+
+| Code | YouTube URL |
+|------|-------------|
+${videoTable}
+
+**Add inline timestamp links for key definitions and theorem introductions.** When you introduce a major concept, find the closest \`[MM:SS]\` marker in the relevant transcript where that concept is clearly stated, then add a link immediately after the definition.
+
+**Link format:** \`[▶ CODE @ MM:SS](YOUTUBE_URL&t=SECONDS)\`
+
+To compute \`t=SECONDS\` from \`[MM:SS]\`: multiply MM by 60 and add SS. For example, \`[02:43]\` → \`t=163\`.
+
+**Example usage:**
+\`\`\`
+A **matrix** is a rectangular array of numbers arranged in rows and columns. [▶ W1_L2 @ 01:51](https://www.youtube.com/watch?v=rnIDlZnrCc0&t=111)
+\`\`\`
+
+**Rules:**
+- Add links only for key definitions and major theorem statements, not every sentence
+- Use the timestamp where the concept is FIRST clearly stated in the transcript
+- Place the link at the END of the definition sentence, before any following text
+- Aim for roughly one link per major section heading (5–15 links total per file)
+- If a concept spans multiple sources, link to the clearest explanation
+
+### End-of-file Sources Section
+
+After the final summary table, add a \`## Sources\` section listing all source videos:
+
+\`\`\`markdown
+## Sources
+
+${sourceVideos.map(v => `- [${v.code}](${v.url})`).join('\n')}
+\`\`\`
+
 Produce the complete markdown file now. Be comprehensive — aim for the same depth as the existing notes (files 1–7 averaged ~350 lines each).`;
 }
 
 // ── Main Synthesis Loop ──────────────────────────────────────────────────────
 
-async function synthesiseFile(target: SynthesisTarget, index: number, total: number): Promise<void> {
+async function synthesiseFile(target: SynthesisTarget, index: number, total: number, force: boolean): Promise<void> {
   const outputPath = path.join(NOTES_DIR, target.output);
 
-  if (fs.existsSync(outputPath)) {
+  if (fs.existsSync(outputPath) && !force) {
     console.log(`[${index}/${total}] SKIP (exists): ${target.output}`);
     return;
   }
 
-  console.log(`\n[${index}/${total}] Synthesising: ${target.output}`);
+  console.log(`\n[${index}/${total}] Synthesising: ${target.output}${force && fs.existsSync(outputPath) ? ' (force overwrite)' : ''}`);
   console.log(`  Sources: ${target.sources.length} transcripts`);
 
-  // Read all source transcripts
+  // Read all source transcripts and extract video metadata
+  const sourceVideos: SourceVideo[] = [];
   const transcriptBlocks = target.sources
     .map((src, i) => {
       const content = readTranscript(src);
       if (!content) return '';
+      const code = extractVideoCode(src, content);
+      const url = extractYouTubeUrl(content);
+      if (url) sourceVideos.push({ code, file: src, url });
       const name = path.basename(src, '.md').replace(/_/g, ' ');
       return `### Source ${i + 1}: ${name}\n\n${content}`;
     })
@@ -309,7 +373,7 @@ async function synthesiseFile(target: SynthesisTarget, index: number, total: num
     .map(ref => readExistingNoteTOC(ref))
     .join('\n\n---\n\n');
 
-  const prompt = buildPrompt(target, transcriptBlocks, crossRefContext);
+  const prompt = buildPrompt(target, transcriptBlocks, crossRefContext, sourceVideos);
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
@@ -359,16 +423,22 @@ async function main() {
   console.log(`Output dir:  ${NOTES_DIR}`);
   console.log(`Plan:        ${PLAN.length} files\n`);
 
-  const targetArg = process.argv[2]; // optional: run single file by index (1-based)
+  // Args: [index] [--force]
+  const args = process.argv.slice(2);
+  const force = args.includes('--force');
+  const targetArg = args.find(a => /^\d+$/.test(a)); // optional: run single file by index (1-based)
+
   const targets = targetArg
     ? [PLAN[parseInt(targetArg) - 1]].filter(Boolean)
     : PLAN;
+
+  if (force) console.log('  --force: existing files will be overwritten\n');
 
   for (let i = 0; i < targets.length; i++) {
     const target = targets[i];
     if (!target) continue;
     const globalIndex = PLAN.indexOf(target) + 1;
-    await synthesiseFile(target, globalIndex, PLAN.length);
+    await synthesiseFile(target, globalIndex, PLAN.length, force);
     if (i < targets.length - 1) await delay(1000);
   }
 
