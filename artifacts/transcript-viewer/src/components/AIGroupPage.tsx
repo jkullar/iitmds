@@ -1,4 +1,6 @@
-import { BrainCircuit, MessageCircle, ShieldAlert, Lightbulb, Rocket, Sparkles, Users, CheckCircle2, Clock, MessageSquare } from "lucide-react";
+import { useState } from "react";
+import { BrainCircuit, MessageCircle, ShieldAlert, Lightbulb, Rocket, Sparkles, Users, CheckCircle2, Clock, Zap, Heart } from "lucide-react";
+import { DonateModal } from "./DonateModal";
 
 const WA_LINK = "https://chat.whatsapp.com/GiZzhBVwGytGN0yIW4N6rF";
 
@@ -82,6 +84,8 @@ function JoinButton({ large = false }: { large?: boolean }) {
 }
 
 export function AIGroupPage() {
+  const [showDonate, setShowDonate] = useState(false);
+
   return (
     <div className="h-full overflow-y-auto scrollbar-thin bg-background" style={{ fontFamily: "'Outfit', sans-serif" }}>
 
@@ -197,14 +201,31 @@ export function AIGroupPage() {
           </div>
         </div>
 
-        {/* ── FOOTER NOTE ───────────────────────────────── */}
-        <div className="flex items-center gap-2 justify-center py-4">
-          <MessageSquare className="w-3.5 h-3.5 text-muted-foreground/50" />
-          <p className="text-xs text-muted-foreground">
+        {/* ── FOOTER ───────────────────────────────────── */}
+        <div className="mt-4 pt-6 border-t border-border/50 flex flex-col items-center gap-3 pb-8">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span>🇮🇳 Made in India</span>
+            <span className="text-muted-foreground/30">·</span>
+            <span>✨ Made with AI</span>
+          </div>
+          <p className="text-center text-xs text-muted-foreground max-w-md">
             This is a community discussion group, not an official institution.
           </p>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full">
+            <Zap className="w-3 h-3 text-amber-500" />
+            <span className="tabular-nums font-medium text-foreground">2,847,392</span>
+            <span>AI tokens used to build &amp; update this site</span>
+          </div>
+          <button
+            onClick={() => setShowDonate(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-rose-500 hover:text-rose-600 transition-colors"
+          >
+            <Heart className="w-3 h-3 fill-rose-500" />
+            Please donate to keep this website running
+          </button>
         </div>
       </div>
+      {showDonate && <DonateModal onClose={() => setShowDonate(false)} />}
     </div>
   );
 }
