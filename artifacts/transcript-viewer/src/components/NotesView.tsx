@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -59,10 +59,22 @@ interface NotesViewProps {
   onSidebarClose: () => void;
 }
 
+// Load voices, waiting for Chrome's async voiceschanged event if needed
+function loadVoices(): Promise<SpeechSynthesisVoice[]> {
+  return new Promise((resolve) => {
+    const voices = speechSynthesis.getVoices();
+    if (voices.length > 0) { resolve(voices); return; }
+    const handler = () => { resolve(speechSynthesis.getVoices()); };
+    speechSynthesis.addEventListener("voiceschanged", handler, { once: true });
+    setTimeout(() => { speechSynthesis.removeEventListener("voiceschanged", handler); resolve([]); }, 2000);
+  });
+}
+
 export function NotesView({ sidebarOpen, onSidebarClose }: NotesViewProps) {
   const [selectedId, setSelectedId] = useState<string>("1");
   const [searchQuery, setSearchQuery] = useState("");
   const [ttsState, setTtsState] = useState<"idle" | "playing" | "paused">("idle");
+  const keepAliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const filteredNotes = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -83,10 +95,18 @@ export function NotesView({ sidebarOpen, onSidebarClose }: NotesViewProps) {
     })).filter((g) => g.notes.length > 0);
   }, [filteredNotes]);
 
+  const clearKeepAlive = useCallback(() => {
+    if (keepAliveRef.current !== null) {
+      clearInterval(keepAliveRef.current);
+      keepAliveRef.current = null;
+    }
+  }, []);
+
   const stopSpeech = useCallback(() => {
+    clearKeepAlive();
     window.speechSynthesis.cancel();
     setTtsState("idle");
-  }, []);
+  }, [clearKeepAlive]);
 
   const handleSelectNote = (id: string) => {
     stopSpeech();
@@ -95,36 +115,57 @@ export function NotesView({ sidebarOpen, onSidebarClose }: NotesViewProps) {
   };
 
   useEffect(() => {
-    return () => { window.speechSynthesis.cancel(); };
-  }, []);
+    return () => { clearKeepAlive(); window.speechSynthesis.cancel(); };
+  }, [clearKeepAlive]);
 
-  const handlePlay = () => {
+  const handlePlay = useCallback(async () => {
     if (!selectedNote) return;
 
     if (ttsState === "paused") {
       window.speechSynthesis.resume();
       setTtsState("playing");
+      // Restart keep-alive after resume
+      keepAliveRef.current = setInterval(() => {
+        if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+          window.speechSynthesis.pause();
+          window.speechSynthesis.resume();
+        }
+      }, 10000);
       return;
     }
 
+    clearKeepAlive();
     window.speechSynthesis.cancel();
+
+    const voices = await loadVoices();
+    const enVoice = voices.find((v) => v.lang.startsWith("en")) ?? voices[0] ?? null;
 
     const text = `${selectedNote.title}. ${stripForSpeech(selectedNote.content)}`;
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.92;
     utterance.pitch = 1;
     utterance.lang = "en-US";
+    if (enVoice) utterance.voice = enVoice;
 
-    utterance.onend = () => setTtsState("idle");
+    utterance.onend = () => { clearKeepAlive(); setTtsState("idle"); };
 
     setTtsState("playing");
     window.speechSynthesis.speak(utterance);
-  };
 
-  const handlePause = () => {
+    // Chrome Android workaround: pause+resume every 10s to prevent cutoff
+    keepAliveRef.current = setInterval(() => {
+      if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.resume();
+      }
+    }, 10000);
+  }, [selectedNote, ttsState, clearKeepAlive]);
+
+  const handlePause = useCallback(() => {
+    clearKeepAlive();
     window.speechSynthesis.pause();
     setTtsState("paused");
-  };
+  }, [clearKeepAlive]);
 
   const processContent = (content: string) =>
     content.replace(/\[\[([^\]]+)\]\]/g, (_, link) => {
