@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Curriculum extraction runtime cache
+transcripts/.curriculum-progress.json
