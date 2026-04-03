@@ -39,7 +39,7 @@ export function searchTranscripts(
     }
   }
 
-  results.sort((a, b) => b.matchingSegments.length - a.matchingSegments.length);
+  // Results are already in week/video order from iterating data.weeks in sequence
 
   return results;
 }

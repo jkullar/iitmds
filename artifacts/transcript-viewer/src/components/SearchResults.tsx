@@ -39,7 +39,7 @@ export function SearchResults({ results, query, onSelectVideo }: SearchResultsPr
           </span>
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Searching for: <span className="font-medium text-amber-600 dark:text-amber-400">"{query}"</span>
+          Results for <span className="font-medium text-amber-600 dark:text-amber-400">"{query}"</span> — ordered by week
         </p>
       </div>
 
