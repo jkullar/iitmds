@@ -14,13 +14,41 @@ No new dependencies are needed — all UI primitives already exist under
 
 ## Data File
 
-**Source:** `transcripts/curriculum.json`
-
-Copy (or symlink) it into the frontend data directory:
+### File Location in Repo
 
 ```
-artifacts/transcript-viewer/src/data/curriculum.json
+transcripts/curriculum.json          ← source of truth (repo root level)
 ```
+
+This file is committed to the repo and must be copied into the frontend
+bundle so Vite can import it as a static asset:
+
+```
+artifacts/transcript-viewer/src/data/curriculum.json   ← copy here
+```
+
+**Step to perform first — copy the file:**
+
+```bash
+cp transcripts/curriculum.json artifacts/transcript-viewer/src/data/curriculum.json
+```
+
+> The frontend is a fully static SPA (no backend at runtime). It bundles
+> `transcripts.json` the same way — `curriculum.json` follows the exact
+> same pattern. Do **not** fetch it over HTTP; import it directly.
+
+### How to Import in the Component
+
+```ts
+import curriculumData from "@/data/curriculum.json";
+import type { CurriculumData } from "@/types";
+
+const curriculum = curriculumData as CurriculumData;
+```
+
+The `@/` alias resolves to `src/` — confirmed in `vite.config.ts`.
+TypeScript will treat the JSON import as `unknown` by default, hence the
+`as CurriculumData` cast after defining the interface.
 
 ### Top-Level Shape
 
