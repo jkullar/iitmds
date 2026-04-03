@@ -205,23 +205,18 @@ export function HomePage({ onOpenCourse }: HomePageProps) {
     <div className="h-full overflow-y-auto scrollbar-thin bg-background">
       <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="mb-10 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium text-primary mb-4">
-            <GraduationCap className="w-3.5 h-3.5" />
-            IIT Madras Online Degree Programme
-          </div>
           <h1 className="text-3xl font-bold text-foreground mb-2">
-            BS in Data Science & Applications
+            BS in Data Science
           </h1>
           <p className="text-muted-foreground text-sm max-w-lg mx-auto">
-            A full-fledged online degree from IIT Madras — study materials, transcripts and
-            curriculum maps for every course.
+            Study materials, transcripts, concept maps and notes for every course in the degree.
           </p>
           <div className="flex items-center justify-center gap-6 mt-5">
             {[
-              { icon: GraduationCap, label: "5 Programs" },
-              { icon: BookOpen, label: "4 Years" },
-              { icon: FlaskConical, label: "270 Concepts" },
-              { icon: FileText, label: "109 Transcripts" },
+              { icon: GraduationCap, label: "46 Courses" },
+              { icon: FlaskConical, label: "12,000+ Concepts" },
+              { icon: FileText, label: "5,000+ Transcripts" },
+              { icon: BookOpen, label: "800+ Notes" },
             ].map(({ icon: Icon, label }) => (
               <div key={label} className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Icon className="w-3.5 h-3.5 text-primary" />

@@ -164,7 +164,7 @@ function App() {
               <GraduationCap className="w-4 h-4 text-primary-foreground" />
             </div>
             <span className="hidden sm:block text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-              IITM BS
+              BS in Data Science
             </span>
           </button>
 
