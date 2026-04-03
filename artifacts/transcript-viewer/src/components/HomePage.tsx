@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { BookOpen, Lock, ChevronRight, GraduationCap, FlaskConical, FileText, Zap, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DonateModal } from "./DonateModal";
 
 interface HomePageProps {
   onOpenCourse: (courseId: string) => void;
@@ -207,6 +209,8 @@ function CourseCard({ course, onOpen }: { course: Course; onOpen: () => void }) 
 }
 
 export function HomePage({ onOpenCourse }: HomePageProps) {
+  const [showDonate, setShowDonate] = useState(false);
+
   return (
     <div className="h-full overflow-y-auto scrollbar-thin bg-background">
       <div className="max-w-5xl mx-auto px-4 py-8">
@@ -290,15 +294,16 @@ export function HomePage({ onOpenCourse }: HomePageProps) {
             <span className="tabular-nums font-medium text-foreground">2,847,392</span>
             <span>AI tokens used to build &amp; update this site</span>
           </div>
-          <a
-            href="#"
+          <button
+            onClick={() => setShowDonate(true)}
             className="flex items-center gap-1.5 text-xs font-medium text-rose-500 hover:text-rose-600 transition-colors"
           >
             <Heart className="w-3 h-3 fill-rose-500" />
             Please donate to keep this website running
-          </a>
+          </button>
         </div>
       </div>
+      {showDonate && <DonateModal onClose={() => setShowDonate(false)} />}
     </div>
   );
 }
