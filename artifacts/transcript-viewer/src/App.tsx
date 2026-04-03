@@ -36,7 +36,6 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Derive current page & course from URL path
   const pathParts = location.pathname.split("/").filter(Boolean);
   const appPage: "home" | "course" | "aigroup" =
     pathParts[0] === "ai-group" ? "aigroup" :
@@ -48,10 +47,12 @@ function App() {
   const [courseTab, setCourseTab] = useState<CourseTab>("transcripts");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [searchExpanded, setSearchExpanded] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<Week | null>(null);
   const [highlightSegmentIndex, setHighlightSegmentIndex] = useState<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const expandedInputRef = useRef<HTMLInputElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -92,6 +93,7 @@ function App() {
     setSearchQuery("");
     setDebouncedQuery("");
     setSidebarOpen(false);
+    setSearchExpanded(false);
   }, [navigate]);
 
   const handleGoAIGroup = useCallback(() => {
@@ -135,6 +137,7 @@ function App() {
     setSearchQuery("");
     setDebouncedQuery("");
     searchInputRef.current?.focus();
+    expandedInputRef.current?.focus();
   };
 
   const handleSearchChange = (val: string) => {
@@ -142,8 +145,19 @@ function App() {
     if (val.trim()) setCourseTab("transcripts");
   };
 
+  const handleExpandSearch = () => {
+    setSearchExpanded(true);
+    setTimeout(() => expandedInputRef.current?.focus(), 50);
+  };
+
+  const handleCollapseSearch = () => {
+    setSearchExpanded(false);
+    setSearchQuery("");
+    setDebouncedQuery("");
+  };
+
   const courseMeta = activeCourse ? COURSE_META[activeCourse] : null;
-  const showMobileMenuBtn = appPage === "course";
+  const showMobileMenuBtn = appPage === "course" && !searchExpanded;
   const isGlobalSearch = appPage === "home" && debouncedQuery.trim().length > 0;
   const searchPlaceholder =
     appPage === "home"
@@ -160,6 +174,8 @@ function App() {
     <div className="h-screen flex flex-col overflow-hidden bg-background">
       <header className="flex-shrink-0 border-b border-border bg-card z-10">
         <div className="flex items-center h-12 px-3 gap-2">
+
+          {/* Mobile sidebar toggle */}
           {showMobileMenuBtn && (
             <button
               onClick={() => setSidebarOpen((v) => !v)}
@@ -169,28 +185,28 @@ function App() {
             </button>
           )}
 
-          <button
-            onClick={handleGoHome}
-            className="flex items-center gap-2 flex-shrink-0 group mr-1"
-          >
-            <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
-              <GraduationCap className="w-4 h-4 text-primary-foreground" />
-            </div>
-            <span className="hidden sm:block text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-              BS in Data Science
-            </span>
-          </button>
-
-          {appPage === "course" && courseMeta && (
-            <>
-              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 flex-shrink-0" />
-              <span className="text-xs text-muted-foreground hidden sm:flex items-center gap-1 flex-shrink-0">
-                {courseMeta.level}
-                <ChevronRight className="w-3 h-3 opacity-40" />
-                {courseMeta.semester}
+          {/* Brand: DytaDex logo + AI */}
+          {!searchExpanded && (
+            <button
+              onClick={handleGoHome}
+              className="flex items-center gap-1.5 flex-shrink-0 group"
+            >
+              <img
+                src="/dytadex-logo.png"
+                alt="DytaDex"
+                className="h-6 w-auto"
+              />
+              <span className="text-sm font-bold text-[#3ab5b0] tracking-wide hidden sm:block">
+                AI
               </span>
+            </button>
+          )}
+
+          {/* Course breadcrumb */}
+          {!searchExpanded && appPage === "course" && courseMeta && (
+            <>
               <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 flex-shrink-0 hidden sm:block" />
-              <span className="text-xs font-medium text-foreground truncate max-w-[140px] sm:max-w-none flex-shrink min-w-0">
+              <span className="text-xs font-medium text-foreground truncate max-w-[140px] sm:max-w-xs flex-shrink min-w-0 hidden sm:block">
                 {courseMeta.name}
               </span>
             </>
@@ -198,55 +214,98 @@ function App() {
 
           <div className="flex-1" />
 
-          <div className="flex-1 max-w-md relative hidden sm:block">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-            <input
-              ref={searchInputRef}
-              type="search"
-              placeholder={searchPlaceholder}
-              value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full h-8 pl-8 pr-8 rounded-md text-sm bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-all"
-            />
-            {searchQuery && (
+          {/* Expandable search */}
+          {searchExpanded ? (
+            <div className="flex-1 flex items-center gap-2 max-w-xl">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  ref={expandedInputRef}
+                  type="search"
+                  placeholder={searchPlaceholder}
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className="w-full h-8 pl-8 pr-8 rounded-md text-sm bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-all"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={clearSearch}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
               <button
-                onClick={clearSearch}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                onClick={handleCollapseSearch}
+                className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground flex-shrink-0"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              {/* BS Data Science nav button */}
+              <button
+                onClick={handleGoHome}
+                className={cn(
+                  "flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold transition-colors flex-shrink-0",
+                  appPage === "home" || appPage === "course"
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+                title="BS in Data Science"
+              >
+                <GraduationCap className="w-4 h-4" />
+                <span className="hidden md:inline">BS Data Science</span>
+              </button>
 
-          <button
-            onClick={() => setDarkMode((v) => !v)}
-            className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground flex-shrink-0"
-          >
-            {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
+              {/* Free AI Group nav button */}
+              <button
+                onClick={handleGoAIGroup}
+                className={cn(
+                  "flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold transition-colors flex-shrink-0",
+                  appPage === "aigroup"
+                    ? "bg-violet-600 text-white"
+                    : "bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900/60"
+                )}
+                title="Free AI Group"
+              >
+                <BookOpen className="w-4 h-4" />
+                <span className="hidden md:inline">Free AI Group</span>
+              </button>
 
-          <button
-            onClick={handleGoAIGroup}
-            className={cn(
-              "flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold transition-colors flex-shrink-0",
-              appPage === "aigroup"
-                ? "bg-violet-600 text-white"
-                : "bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900/60"
-            )}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Free AI Group</span>
-          </button>
+              {/* Request Course Access */}
+              <a
+                href="https://chat.whatsapp.com/FFjFQZSHYzyLTu4rdLuwGu?mode=gi_t"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold bg-[#25D366] hover:bg-[#1ebe5d] text-white transition-colors flex-shrink-0"
+                title="Request Course Access"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span className="hidden md:inline">Request Course</span>
+              </a>
 
-          <a
-            href="https://chat.whatsapp.com/FFjFQZSHYzyLTu4rdLuwGu?mode=gi_t"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold bg-[#25D366] hover:bg-[#1ebe5d] text-white transition-colors flex-shrink-0"
-          >
-            <MessageCircle className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Request Course Access</span>
-          </a>
+              {/* Search icon — expands on click */}
+              <button
+                onClick={handleExpandSearch}
+                className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground flex-shrink-0"
+                title="Search"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+
+              {/* Dark mode toggle — icon only */}
+              <button
+                onClick={() => setDarkMode((v) => !v)}
+                className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground flex-shrink-0"
+                title={darkMode ? "Light mode" : "Dark mode"}
+              >
+                {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+            </div>
+          )}
         </div>
 
         {appPage === "course" && (
@@ -344,7 +403,7 @@ function App() {
                   {transcriptsMode === "welcome" && (
                     <WelcomeScreen
                       data={data}
-                      onSearchFocus={() => searchInputRef.current?.focus()}
+                      onSearchFocus={handleExpandSearch}
                       onSelectVideo={handleSelectVideo}
                       onOpenNotes={() => setCourseTab("notes")}
                       onOpenCurriculum={() => setCourseTab("curriculum")}
