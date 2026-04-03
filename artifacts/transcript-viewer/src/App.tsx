@@ -227,7 +227,7 @@ function App() {
                 className="h-6 w-auto"
               />
               <span className="text-sm font-bold text-[#3ab5b0] tracking-wide hidden sm:block">
-                AI
+                Frontier AI
               </span>
             </button>
           )}
