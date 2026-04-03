@@ -157,6 +157,36 @@ function App() {
   };
 
   const courseMeta = activeCourse ? COURSE_META[activeCourse] : null;
+
+  // Dynamic page title + meta description per route
+  useEffect(() => {
+    const setMeta = (title: string, description: string) => {
+      document.title = title;
+      const desc = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+      if (desc) desc.content = description;
+      const ogTitle = document.querySelector<HTMLMetaElement>('meta[property="og:title"]');
+      if (ogTitle) ogTitle.content = title;
+      const ogDesc = document.querySelector<HTMLMetaElement>('meta[property="og:description"]');
+      if (ogDesc) ogDesc.content = description;
+    };
+    if (appPage === "aigroup") {
+      setMeta(
+        "Free AI Discussion Group — DytaDex AI",
+        "Join a free weekly community discussion group on Artificial Intelligence topics. Open for everyone, hosted on WhatsApp. Powered by DytaDex AI."
+      );
+    } else if (appPage === "course" && courseMeta) {
+      setMeta(
+        `${courseMeta.name} — DytaDex AI`,
+        `Full transcripts, concept map and AI-generated notes for ${courseMeta.name} (${courseMeta.level}, ${courseMeta.semester}) from the BS in Data Science degree.`
+      );
+    } else {
+      setMeta(
+        "DytaDex AI — BS in Data Science Study Hub",
+        "Transcripts, concept maps, AI-generated notes and full-text search for every lecture in the BS in Data Science degree. Study smarter with DytaDex AI."
+      );
+    }
+  }, [appPage, courseMeta]);
+
   const showMobileMenuBtn = appPage === "course" && !searchExpanded;
   const isGlobalSearch = appPage === "home" && debouncedQuery.trim().length > 0;
   const searchPlaceholder =
