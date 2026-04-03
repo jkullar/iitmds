@@ -6,7 +6,13 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "extract-transcripts": "tsx ./src/extract-transcripts.ts",
+    "extract-curriculum": "tsx ./src/extract-curriculum.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.55.0",
+    "https-proxy-agent": "^9.0.0",
+    "undici": "^7.24.7"
   },
   "devDependencies": {
     "@types/node": "catalog:",
