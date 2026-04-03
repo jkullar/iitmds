@@ -223,7 +223,7 @@ function App() {
             )}
           >
             <BookOpen className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">AI Group</span>
+            <span className="hidden sm:inline">Free AI Group</span>
           </button>
 
           <a
@@ -233,7 +233,7 @@ function App() {
             className="flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold bg-[#25D366] hover:bg-[#1ebe5d] text-white transition-colors flex-shrink-0"
           >
             <MessageCircle className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Request Access</span>
+            <span className="hidden sm:inline">Request Course Access</span>
           </a>
         </div>
 
