@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { BookOpen, Lock, ChevronRight, GraduationCap, FlaskConical, FileText, Zap, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DonateModal } from "./DonateModal";
@@ -177,7 +178,8 @@ function CourseCard({ course, onOpen }: { course: Course; onOpen: () => void }) 
   }
 
   return (
-    <button
+    <Link
+      to={`/course/${course.id}`}
       onClick={onOpen}
       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-primary/30 bg-primary/5 hover:bg-primary/10 hover:border-primary/50 transition-all text-left group"
     >
@@ -204,7 +206,7 @@ function CourseCard({ course, onOpen }: { course: Course; onOpen: () => void }) 
         )}
       </div>
       <ChevronRight className="w-4 h-4 text-primary/60 flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
-    </button>
+    </Link>
   );
 }
 

@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Search, X, Moon, Sun, Menu, ChevronLeft,
   BookOpen, GraduationCap, FileText, ChevronRight, MessageCircle,
@@ -20,7 +21,6 @@ import { cn } from "@/lib/utils";
 
 const data = transcriptsData as unknown as TranscriptsData;
 
-type AppPage = "home" | "course" | "aigroup";
 type CourseTab = "transcripts" | "curriculum" | "notes";
 type TranscriptsMode = "welcome" | "transcript" | "search";
 
@@ -33,10 +33,18 @@ const COURSE_META: Record<string, { name: string; level: string; semester: strin
 };
 
 function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Derive current page & course from URL path
+  const pathParts = location.pathname.split("/").filter(Boolean);
+  const appPage: "home" | "course" | "aigroup" =
+    pathParts[0] === "ai-group" ? "aigroup" :
+    pathParts[0] === "course" ? "course" : "home";
+  const activeCourse: string | null = appPage === "course" ? (pathParts[1] ?? null) : null;
+
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [appPage, setAppPage] = useState<AppPage>("home");
-  const [activeCourse, setActiveCourse] = useState<string | null>(null);
   const [courseTab, setCourseTab] = useState<CourseTab>("transcripts");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -68,8 +76,7 @@ function App() {
   }, [debouncedQuery, selectedVideo]);
 
   const handleOpenCourse = useCallback((courseId: string, withQuery?: string) => {
-    setActiveCourse(courseId);
-    setAppPage("course");
+    navigate(`/course/${courseId}`);
     setCourseTab("transcripts");
     if (withQuery) {
       setSearchQuery(withQuery);
@@ -78,14 +85,19 @@ function App() {
       setSearchQuery("");
       setDebouncedQuery("");
     }
-  }, []);
+  }, [navigate]);
 
   const handleGoHome = useCallback(() => {
-    setAppPage("home");
+    navigate("/");
     setSearchQuery("");
     setDebouncedQuery("");
     setSidebarOpen(false);
-  }, []);
+  }, [navigate]);
+
+  const handleGoAIGroup = useCallback(() => {
+    navigate("/ai-group");
+    setSidebarOpen(false);
+  }, [navigate]);
 
   const handleSelectVideo = useCallback((video: Video, week: Week, segmentIndex?: number) => {
     setSelectedVideo(video);
@@ -214,7 +226,7 @@ function App() {
           </button>
 
           <button
-            onClick={() => { setAppPage("aigroup"); setSidebarOpen(false); }}
+            onClick={handleGoAIGroup}
             className={cn(
               "flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold transition-colors flex-shrink-0",
               appPage === "aigroup"
