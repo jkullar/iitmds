@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Transcript Viewer"
+version = "1.0.0"
+id = "artifacts/transcript-viewer"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19126
+
+[services.development]
+run = "pnpm --filter @workspace/transcript-viewer run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/transcript-viewer", "run", "build" ]
+publicDir = "artifacts/transcript-viewer/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19126"
+BASE_PATH = "/"
