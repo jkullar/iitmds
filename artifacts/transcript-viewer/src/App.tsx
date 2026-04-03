@@ -313,6 +313,9 @@ function App() {
                     <WelcomeScreen
                       data={data}
                       onSearchFocus={() => searchInputRef.current?.focus()}
+                      onSelectVideo={handleSelectVideo}
+                      onOpenNotes={() => setCourseTab("notes")}
+                      onOpenCurriculum={() => setCourseTab("curriculum")}
                     />
                   )}
                   {transcriptsMode === "transcript" && selectedVideo && selectedWeek && (
