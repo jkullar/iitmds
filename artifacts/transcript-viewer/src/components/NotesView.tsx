@@ -4,7 +4,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { cn } from "@/lib/utils";
-import { ChevronRight, Search, X, BookOpen } from "lucide-react";
+import { ChevronRight, Search, X } from "lucide-react";
 import notesRaw from "@/data/notes.json";
 
 interface Note {
@@ -34,10 +34,14 @@ function toNoteId(link: string): string | null {
   return found?.id ?? null;
 }
 
-export function NotesView() {
+interface NotesViewProps {
+  sidebarOpen: boolean;
+  onSidebarClose: () => void;
+}
+
+export function NotesView({ sidebarOpen, onSidebarClose }: NotesViewProps) {
   const [selectedId, setSelectedId] = useState<string>("1");
   const [searchQuery, setSearchQuery] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const filteredNotes = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -60,7 +64,7 @@ export function NotesView() {
 
   const handleSelectNote = (id: string) => {
     setSelectedId(id);
-    setSidebarOpen(false);
+    onSidebarClose();
   };
 
   const processContent = (content: string) =>
@@ -140,25 +144,15 @@ export function NotesView() {
       {sidebarOpen && (
         <div
           className="md:hidden fixed inset-0 bg-black/50 z-20"
-          onClick={() => setSidebarOpen(false)}
+          onClick={onSidebarClose}
         />
       )}
 
       <main className="flex-1 overflow-y-auto">
         {selectedNote ? (
           <div className="max-w-3xl mx-auto px-6 py-8">
-            <div className="flex items-center gap-2 mb-6 md:hidden">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <BookOpen className="w-3.5 h-3.5" />
-                All topics
-                <ChevronRight className="w-3 h-3" />
-              </button>
-              <span className="text-xs font-medium text-foreground">
-                {selectedNote.title}
-              </span>
+            <div className="md:hidden mb-4 text-xs text-muted-foreground">
+              {selectedNote.section} · Note {selectedNote.number}
             </div>
 
             <div className="mb-2 text-xs text-muted-foreground font-medium uppercase tracking-wide">

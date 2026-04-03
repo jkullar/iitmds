@@ -8,6 +8,8 @@ const curriculum = curriculumData as unknown as CurriculumData;
 
 interface CurriculumViewProps {
   onNavigateToTranscript: (code: string, timestamp: string) => void;
+  sidebarOpen: boolean;
+  onSidebarClose: () => void;
 }
 
 const WEEK_ORDER = [
@@ -204,7 +206,7 @@ function WeekSection({
   );
 }
 
-export function CurriculumView({ onNavigateToTranscript }: CurriculumViewProps) {
+export function CurriculumView({ onNavigateToTranscript, sidebarOpen, onSidebarClose }: CurriculumViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
 
@@ -234,96 +236,119 @@ export function CurriculumView({ onNavigateToTranscript }: CurriculumViewProps) 
 
   const totalShown = filteredWeeks.reduce((s, w) => s + w.concepts.length, 0);
 
+  const handleSelectWeek = (weekKey: string | null) => {
+    setSelectedWeek(weekKey);
+    onSidebarClose();
+  };
+
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex-shrink-0 border-b border-border bg-card px-5 py-3 space-y-3">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <GraduationCap className="w-4 h-4 text-primary" />
-            <h1 className="text-sm font-semibold text-foreground">Curriculum Map</h1>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <BookOpen className="w-3 h-3" />
-              {curriculum.total_concepts} concepts
-            </span>
-            <span className="flex items-center gap-1">
-              <FlaskConical className="w-3 h-3" />
-              {curriculum.total_problems} problems
-            </span>
+    <div className="h-full flex overflow-hidden">
+      {sidebarOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/50 z-20"
+          onClick={onSidebarClose}
+        />
+      )}
+
+      <aside
+        className={cn(
+          "flex-shrink-0 w-64 border-r border-border bg-card flex flex-col z-30",
+          "md:flex md:relative md:translate-x-0",
+          sidebarOpen ? "fixed inset-y-0 left-0 flex shadow-xl" : "hidden md:flex"
+        )}
+      >
+        <div className="p-3 border-b border-border">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              type="search"
+              placeholder="Filter concepts..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full h-8 pl-8 pr-7 rounded-md text-sm bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-          <input
-            type="search"
-            placeholder="Filter concepts... (e.g. determinant, gradient)"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-8 pl-8 pr-8 rounded-md text-xs bg-muted/60 border border-border/60 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-all"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-
-        <div className="flex gap-1.5 flex-wrap">
+        <div className="flex-1 overflow-y-auto py-2">
           <button
-            onClick={() => setSelectedWeek(null)}
+            onClick={() => handleSelectWeek(null)}
             className={cn(
-              "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors",
+              "w-full text-left px-3 py-2 flex items-center gap-2.5 text-sm transition-colors",
               selectedWeek === null
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:text-foreground"
+                ? "bg-primary/10 text-primary font-medium"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
             )}
           >
-            All weeks
+            <GraduationCap className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="flex-1 leading-tight">All weeks</span>
+            <span className="text-[10px] tabular-nums opacity-60">{curriculum.total_concepts}</span>
           </button>
-          {sortedWeeks.map((w) => (
-            <button
-              key={w.week}
-              onClick={() => setSelectedWeek(w.week === selectedWeek ? null : w.week)}
-              className={cn(
-                "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors border",
-                w.week === selectedWeek
-                  ? cn("border-transparent", weekColors[w.week])
-                  : "bg-transparent border-border text-muted-foreground hover:text-foreground hover:bg-muted/60"
-              )}
-            >
-              {w.label}
-            </button>
-          ))}
+
+          <div className="my-1 mx-3 border-t border-border/50" />
+
+          {sortedWeeks.map((w) => {
+            const dot = weekDotColors[w.week] ?? "bg-gray-500";
+            return (
+              <button
+                key={w.week}
+                onClick={() => handleSelectWeek(w.week)}
+                className={cn(
+                  "w-full text-left px-3 py-2 flex items-center gap-2.5 text-sm transition-colors",
+                  selectedWeek === w.week
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                )}
+              >
+                <span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
+                <span className="flex-1 leading-tight text-xs">{w.label}</span>
+                <span className="text-[10px] tabular-nums opacity-60">{w.concepts.length}</span>
+              </button>
+            );
+          })}
         </div>
 
-        {(searchQuery || selectedWeek) && (
-          <p className="text-xs text-muted-foreground">
-            Showing <span className="font-medium text-foreground">{totalShown}</span> concept{totalShown !== 1 ? "s" : ""}
-          </p>
-        )}
-      </div>
+        <div className="p-3 border-t border-border flex items-center justify-between text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{curriculum.total_concepts} concepts</span>
+          <span className="flex items-center gap-1"><FlaskConical className="w-3 h-3" />{curriculum.total_problems} problems</span>
+        </div>
+      </aside>
 
-      <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4">
-        {filteredWeeks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-40 gap-2 text-center">
-            <p className="text-sm font-medium text-foreground">No concepts match</p>
-            <p className="text-xs text-muted-foreground">Try a different search term</p>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {(searchQuery || selectedWeek) && (
+          <div className="flex-shrink-0 px-5 pt-3 pb-0">
+            <p className="text-xs text-muted-foreground">
+              Showing <span className="font-medium text-foreground">{totalShown}</span> concept{totalShown !== 1 ? "s" : ""}
+              {selectedWeek && <> in <span className="font-medium text-foreground">{sortedWeeks.find(w => w.week === selectedWeek)?.label}</span></>}
+            </p>
           </div>
-        ) : (
-          filteredWeeks.map(({ week, concepts }) => (
-            <WeekSection
-              key={week.week}
-              week={week}
-              concepts={concepts}
-              onNavigate={onNavigateToTranscript}
-            />
-          ))
         )}
+
+        <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4">
+          {filteredWeeks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 gap-2 text-center">
+              <p className="text-sm font-medium text-foreground">No concepts match</p>
+              <p className="text-xs text-muted-foreground">Try a different search term</p>
+            </div>
+          ) : (
+            filteredWeeks.map(({ week, concepts }) => (
+              <WeekSection
+                key={week.week}
+                week={week}
+                concepts={concepts}
+                onNavigate={onNavigateToTranscript}
+              />
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

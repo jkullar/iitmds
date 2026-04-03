@@ -130,7 +130,7 @@ function App() {
   };
 
   const courseMeta = activeCourse ? COURSE_META[activeCourse] : null;
-  const showMobileMenuBtn = appPage === "course" && courseTab === "transcripts";
+  const showMobileMenuBtn = appPage === "course";
   const isGlobalSearch = appPage === "home" && debouncedQuery.trim().length > 0;
   const searchPlaceholder =
     appPage === "home"
@@ -231,7 +231,7 @@ function App() {
             {COURSE_TABS.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
-                onClick={() => setCourseTab(id)}
+                onClick={() => { setCourseTab(id); setSidebarOpen(false); }}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 -mb-px",
                   courseTab === id
@@ -336,9 +336,18 @@ function App() {
                 </>
               )}
               {courseTab === "curriculum" && (
-                <CurriculumView onNavigateToTranscript={handleNavigateToTranscript} />
+                <CurriculumView
+                  onNavigateToTranscript={handleNavigateToTranscript}
+                  sidebarOpen={sidebarOpen}
+                  onSidebarClose={() => setSidebarOpen(false)}
+                />
               )}
-              {courseTab === "notes" && <NotesView />}
+              {courseTab === "notes" && (
+                <NotesView
+                  sidebarOpen={sidebarOpen}
+                  onSidebarClose={() => setSidebarOpen(false)}
+                />
+              )}
             </main>
           </>
         )}
