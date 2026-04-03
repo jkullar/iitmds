@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import {
   Search, X, Moon, Sun, Menu, ChevronLeft,
-  BookOpen, GraduationCap, FileText, Home, ChevronRight, MessageCircle,
+  BookOpen, GraduationCap, FileText, ChevronRight, MessageCircle,
 } from "lucide-react";
 import transcriptsData from "@/data/maths2/transcripts.json";
 import type { TranscriptsData, Video, Week } from "@/types";
@@ -166,19 +166,6 @@ function App() {
             <span className="hidden sm:block text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
               BS in Data Science
             </span>
-          </button>
-
-          <button
-            onClick={handleGoHome}
-            className={cn(
-              "flex items-center gap-1.5 px-2.5 h-8 rounded-md text-xs font-medium transition-colors flex-shrink-0",
-              appPage === "home"
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            )}
-          >
-            <Home className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Home</span>
           </button>
 
           {appPage === "course" && courseMeta && (
