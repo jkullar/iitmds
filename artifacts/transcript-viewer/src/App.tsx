@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   Search, X, Moon, Sun, Menu, ChevronLeft,
   BookOpen, GraduationCap, FileText, ChevronRight, MessageCircle, LogIn,
+  BookmarkCheck, BookmarkPlus, Loader2,
 } from "lucide-react";
 import transcriptsData from "@/data/maths2/transcripts.json";
 import type { TranscriptsData, Video, Week } from "@/types";
@@ -18,12 +19,72 @@ import { HomePage } from "@/components/HomePage";
 import { GlobalSearchResults } from "@/components/GlobalSearchResults";
 import { AIGroupPage } from "@/components/AIGroupPage";
 import { useAuth } from "@/context/AuthContext";
+import { COURSE_REGISTRY } from "@/lib/courseRegistry";
 import { cn } from "@/lib/utils";
 
 const data = transcriptsData as unknown as TranscriptsData;
 
 type CourseTab = "transcripts" | "curriculum" | "notes";
 type TranscriptsMode = "welcome" | "transcript" | "search";
+
+// ─── Track Progress Button ────────────────────────────────────────────────────
+function TrackProgressButton({
+  user,
+  isSubscribed,
+  toggling,
+  onToggle,
+}: {
+  user: { name: string } | null;
+  isSubscribed: boolean | null;
+  toggling: boolean;
+  onToggle: () => void;
+}) {
+  if (!user) {
+    // Not logged in — show "Track Progress" prompting login
+    return (
+      <button
+        onClick={onToggle}
+        className="flex items-center gap-1.5 h-7 px-3 rounded-full border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors flex-shrink-0"
+      >
+        <BookmarkPlus className="w-3.5 h-3.5" />
+        <span className="hidden sm:inline">Track Progress</span>
+      </button>
+    );
+  }
+
+  if (isSubscribed === null || toggling) {
+    return (
+      <span className="flex items-center gap-1.5 h-7 px-3 rounded-full border border-border text-xs text-muted-foreground flex-shrink-0">
+        <Loader2 className="w-3 h-3 animate-spin" />
+      </span>
+    );
+  }
+
+  if (isSubscribed) {
+    return (
+      <button
+        onClick={onToggle}
+        className="flex items-center gap-1.5 h-7 px-3 rounded-full bg-green-500/10 border border-green-500/30 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-red-500/10 hover:border-red-400/30 hover:text-red-600 dark:hover:text-red-400 transition-colors flex-shrink-0 group"
+        title="Click to untrack"
+      >
+        <BookmarkCheck className="w-3.5 h-3.5 group-hover:hidden" />
+        <X className="w-3.5 h-3.5 hidden group-hover:inline" />
+        <span className="hidden sm:inline group-hover:hidden">Tracking</span>
+        <span className="hidden sm:group-hover:inline">Untrack</span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={onToggle}
+      className="flex items-center gap-1.5 h-7 px-3 rounded-full border border-primary/40 bg-primary/5 text-xs font-medium text-primary hover:bg-primary/15 transition-colors flex-shrink-0"
+    >
+      <BookmarkPlus className="w-3.5 h-3.5" />
+      <span className="hidden sm:inline">Track Progress</span>
+    </button>
+  );
+}
 
 const COURSE_META: Record<string, { name: string; level: string; semester: string; degreeSlug: string }> = {
   maths2: {
@@ -63,9 +124,53 @@ function App() {
   const expandedInputRef = useRef<HTMLInputElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ─── Subscription state for the active course ─────────────────────────────
+  const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
+  const [subscriptionToggling, setSubscriptionToggling] = useState(false);
+
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
+
+  // Fetch subscription status whenever course or login state changes
+  useEffect(() => {
+    if (!activeCourse || !user) { setIsSubscribed(null); return; }
+    fetch(`/api/subscriptions`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => {
+        const subs: { courseId: string }[] = d.subscriptions ?? [];
+        setIsSubscribed(subs.some((s) => s.courseId === activeCourse));
+      })
+      .catch(() => setIsSubscribed(null));
+  }, [activeCourse, user]);
+
+  const handleSubscriptionToggle = useCallback(async () => {
+    if (!user) { navigate("/login"); return; }
+    if (subscriptionToggling || !activeCourse) return;
+    const courseInfo = COURSE_REGISTRY[activeCourse];
+    if (!courseInfo) return;
+    setSubscriptionToggling(true);
+    try {
+      if (isSubscribed) {
+        await fetch("/api/subscriptions", {
+          method: "DELETE",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ courseId: activeCourse }),
+        });
+        setIsSubscribed(false);
+      } else {
+        await fetch("/api/subscriptions", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ courseId: activeCourse, degreeId: courseInfo.degreeId }),
+        });
+        setIsSubscribed(true);
+      }
+    } catch {}
+    setSubscriptionToggling(false);
+  }, [user, activeCourse, isSubscribed, subscriptionToggling, navigate]);
 
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -401,9 +506,10 @@ function App() {
               </button>
             ))}
 
-            {courseTab === "transcripts" && (
-              <div className="flex-1 flex items-center justify-end pb-1 sm:hidden">
-                <div className="relative w-40">
+            {/* Right side: mobile search (transcripts only) + track progress button */}
+            <div className="flex-1 flex items-center justify-end gap-2 pb-1">
+              {courseTab === "transcripts" && (
+                <div className="sm:hidden relative w-36">
                   <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
                   <input
                     type="search"
@@ -418,8 +524,14 @@ function App() {
                     </button>
                   )}
                 </div>
-              </div>
-            )}
+              )}
+              <TrackProgressButton
+                user={user}
+                isSubscribed={isSubscribed}
+                toggling={subscriptionToggling}
+                onToggle={handleSubscriptionToggle}
+              />
+            </div>
           </div>
         )}
       </header>
