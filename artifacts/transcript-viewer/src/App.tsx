@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Search, X, Moon, Sun, Menu, ChevronLeft,
-  BookOpen, GraduationCap, FileText, ChevronRight, MessageCircle, LayoutDashboard, LogIn,
+  BookOpen, GraduationCap, FileText, ChevronRight, MessageCircle, LogIn,
 } from "lucide-react";
 import transcriptsData from "@/data/maths2/transcripts.json";
 import type { TranscriptsData, Video, Week } from "@/types";
@@ -17,9 +17,6 @@ import { NotesView } from "@/components/NotesView";
 import { HomePage } from "@/components/HomePage";
 import { GlobalSearchResults } from "@/components/GlobalSearchResults";
 import { AIGroupPage } from "@/components/AIGroupPage";
-import { LoginPage } from "@/components/LoginPage";
-import { SignupPage } from "@/components/SignupPage";
-import { DashboardPage } from "@/components/DashboardPage";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 
@@ -45,11 +42,6 @@ function App() {
   const { user } = useAuth();
 
   const pathParts = location.pathname.split("/").filter(Boolean);
-
-  // Auth-only fullscreen pages — render without the main app shell
-  if (pathParts[0] === "login") return <LoginPage />;
-  if (pathParts[0] === "signup") return <SignupPage />;
-  if (pathParts[0] === "dashboard") return <DashboardPage />;
 
   const appPage: "home" | "course" | "aigroup" =
     pathParts[0] === "ai-group" ? "aigroup" :

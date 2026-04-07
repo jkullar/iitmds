@@ -46,6 +46,7 @@ export function LoginPage() {
               onChange={(e) => setIdentifier(e.target.value)}
               placeholder="9876543210 or you@email.com"
               required
+              autoComplete="username"
               className="w-full h-10 px-3 rounded-lg border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm"
             />
           </div>

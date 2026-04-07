@@ -213,11 +213,22 @@ export function CurriculumView({ onNavigateToTranscript, sidebarOpen, onSidebarC
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Restore scroll position when returning from transcript (runs only on mount)
+  // Restore scroll position when returning from transcript.
+  // Double-RAF defers until after content has fully painted so scrollHeight is correct.
   useEffect(() => {
-    if (scrollRestorePos && scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = scrollRestorePos;
-    }
+    if (!scrollRestorePos) return;
+    let raf1: number, raf2: number;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = scrollRestorePos;
+        }
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
