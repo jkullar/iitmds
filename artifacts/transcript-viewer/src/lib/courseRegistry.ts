@@ -1,7 +1,11 @@
-import type { TranscriptsData } from "@/types";
+import type { TranscriptsData, CurriculumData } from "@/types";
 import maths2Raw from "@/data/maths2/transcripts.json";
+import maths2CurriculumRaw from "@/data/maths2/curriculum.json";
+import maths2NotesRaw from "@/data/maths2/notes.json";
 
 const maths2Transcripts = maths2Raw as unknown as TranscriptsData;
+const maths2Curriculum = maths2CurriculumRaw as unknown as CurriculumData;
+const maths2Notes = maths2NotesRaw as { id: string }[];
 
 export interface CourseInfo {
   courseId: string;
@@ -12,6 +16,8 @@ export interface CourseInfo {
   level: string;
   semester: string;
   transcripts: TranscriptsData;
+  totalConcepts: number;
+  totalNotes: number;
 }
 
 export const COURSE_REGISTRY: Record<string, CourseInfo> = {
@@ -24,6 +30,8 @@ export const COURSE_REGISTRY: Record<string, CourseInfo> = {
     level: "Foundation",
     semester: "Semester 2",
     transcripts: maths2Transcripts,
+    totalConcepts: maths2Curriculum.weeks.reduce((s, w) => s + w.concepts.length, 0),
+    totalNotes: maths2Notes.length,
   },
 };
 

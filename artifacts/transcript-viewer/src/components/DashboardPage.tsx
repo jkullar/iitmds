@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, type FormEvent } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
-  User, Phone, Mail, Lock, LogOut, BookOpen, CheckCircle2,
-  Circle, ChevronDown, ChevronRight, Edit3, Check, X, Loader2,
+  User, Phone, Mail, Lock, LogOut, BookOpen,
+  Edit3, Check, X, Loader2,
   ArrowLeft, Eye, EyeOff, TrendingUp, BookMarked, GraduationCap,
-  CalendarClock, Zap, Trophy,
+  CalendarClock, Zap, Trophy, Video, FileText, Lightbulb,
 } from "lucide-react";
 import { COURSE_REGISTRY, type CourseInfo } from "@/lib/courseRegistry";
 import type { TranscriptsData } from "@/types";
@@ -24,6 +24,7 @@ interface Subscription {
   courseId: string;
   degreeId: string;
   subscribedAt: string;
+  trackingTypes: string[];
 }
 
 async function apiFetch(path: string, opts?: RequestInit) {
@@ -39,16 +40,15 @@ type TimelineResult =
   | { status: "not_started" }
   | { status: "in_progress"; ratePerDay: number; daysLeft: number; completionDate: Date };
 
-function computeTimeline(subscribedAt: string, progress: ProgressItem[], totalVideos: number): TimelineResult {
-  const completed = progress.length;
-  const remaining = totalVideos - completed;
-  if (remaining === 0) return { status: "done" };
-  if (completed === 0) return { status: "not_started" };
+function computeTimeline(subscribedAt: string, doneSoFar: number, totalItems: number): TimelineResult {
+  const remaining = totalItems - doneSoFar;
+  if (remaining <= 0 && totalItems > 0) return { status: "done" };
+  if (doneSoFar === 0) return { status: "not_started" };
 
   const now = Date.now();
   const start = new Date(subscribedAt).getTime();
   const daysElapsed = Math.max(1, (now - start) / 86_400_000);
-  const ratePerDay = completed / daysElapsed;
+  const ratePerDay = doneSoFar / daysElapsed;
   const daysLeft = Math.round(remaining / ratePerDay);
   const completionDate = new Date(now + daysLeft * 86_400_000);
   return { status: "in_progress", ratePerDay, daysLeft, completionDate };
@@ -58,16 +58,16 @@ function formatDate(d: Date) {
   return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function TimelineSection({ subscribedAt, progress, totalVideos }: {
-  subscribedAt: string; progress: ProgressItem[]; totalVideos: number;
+function TimelineSection({ subscribedAt, doneSoFar, totalItems, unit }: {
+  subscribedAt: string; doneSoFar: number; totalItems: number; unit: string;
 }) {
-  const tl = computeTimeline(subscribedAt, progress, totalVideos);
+  const tl = computeTimeline(subscribedAt, doneSoFar, totalItems);
 
   if (tl.status === "done") {
     return (
       <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/25 text-green-700 dark:text-green-400">
         <Trophy className="w-3.5 h-3.5 flex-shrink-0" />
-        <span className="text-xs font-medium">Course complete! 🎉</span>
+        <span className="text-xs font-medium">All tracked items complete! 🎉</span>
       </div>
     );
   }
@@ -76,15 +76,15 @@ function TimelineSection({ subscribedAt, progress, totalVideos }: {
     return (
       <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/60 border border-border/50 text-muted-foreground">
         <CalendarClock className="w-3.5 h-3.5 flex-shrink-0" />
-        <span className="text-xs">Complete your first video to see your projected finish date.</span>
+        <span className="text-xs">Mark your first {unit} to see your projected finish date.</span>
       </div>
     );
   }
 
   const { ratePerDay, daysLeft, completionDate } = tl;
   const rateLabel = ratePerDay >= 1
-    ? `${ratePerDay.toFixed(1)} videos/day`
-    : `${Math.round(7 * ratePerDay * 10) / 10} videos/week`;
+    ? `${ratePerDay.toFixed(1)} ${unit}/day`
+    : `${Math.round(7 * ratePerDay * 10) / 10} ${unit}/week`;
   const timeLabel = daysLeft > 365
     ? `~${Math.round(daysLeft / 30)} months`
     : daysLeft > 60
@@ -104,22 +104,90 @@ function TimelineSection({ subscribedAt, progress, totalVideos }: {
         </div>
       </div>
       <div className="text-xs text-muted-foreground">
-        Projected completion: <span className="font-semibold text-foreground">{formatDate(completionDate)}</span>
-        <span className="ml-1.5 text-muted-foreground/70 italic text-[10px]">(adjusts as you learn faster)</span>
+        Projected: <span className="font-semibold text-foreground">{formatDate(completionDate)}</span>
+        <span className="ml-1.5 text-muted-foreground/70 italic text-[10px]">(adjusts as you learn)</span>
       </div>
+    </div>
+  );
+}
+
+// ─── Tracking Type Chip ───────────────────────────────────────────────────────
+
+type TrackType = "videos" | "concepts" | "notes";
+
+const TRACK_LABELS: Record<TrackType, { label: string; Icon: typeof Video }> = {
+  videos:   { label: "Videos",   Icon: Video },
+  concepts: { label: "Concepts", Icon: Lightbulb },
+  notes:    { label: "Notes",    Icon: FileText },
+};
+
+function TrackingTypeChips({
+  selected,
+  onChange,
+  saving,
+}: {
+  selected: TrackType[];
+  onChange: (types: TrackType[]) => void;
+  saving: boolean;
+}) {
+  const toggle = (type: TrackType) => {
+    const next = selected.includes(type)
+      ? selected.filter((t) => t !== type)
+      : [...selected, type];
+    if (next.length === 0) return;
+    onChange(next);
+  };
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold flex-shrink-0">Track:</span>
+      {(["videos", "concepts", "notes"] as TrackType[]).map((type) => {
+        const { label, Icon } = TRACK_LABELS[type];
+        const active = selected.includes(type);
+        return (
+          <button
+            key={type}
+            onClick={() => toggle(type)}
+            disabled={saving}
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium border transition-colors",
+              active
+                ? "bg-primary/15 border-primary/40 text-primary"
+                : "bg-muted/40 border-border/50 text-muted-foreground hover:border-border hover:text-foreground"
+            )}
+          >
+            <Icon className="w-3 h-3" />
+            {label}
+          </button>
+        );
+      })}
+      {saving && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />}
     </div>
   );
 }
 
 // ─── Single Course Progress Card ─────────────────────────────────────────────
 
-function CourseProgressCard({ course, userId, subscribedAt }: { course: CourseInfo; userId: string; subscribedAt: string }) {
+function CourseProgressCard({
+  course,
+  userId,
+  subscribedAt,
+  initialTrackingTypes,
+}: {
+  course: CourseInfo;
+  userId: string;
+  subscribedAt: string;
+  initialTrackingTypes: string[];
+}) {
   const navigate = useNavigate();
   const data = course.transcripts as TranscriptsData;
+
   const [progress, setProgress] = useState<ProgressItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
-  const [toggling, setToggling] = useState<Set<string>>(new Set());
+  const [trackingTypes, setTrackingTypes] = useState<TrackType[]>(
+    (initialTrackingTypes as TrackType[]).filter((t) => ["videos", "concepts", "notes"].includes(t))
+  );
+  const [savingTypes, setSavingTypes] = useState(false);
 
   useEffect(() => {
     apiFetch(`/api/progress?courseId=${course.courseId}`)
@@ -128,162 +196,119 @@ function CourseProgressCard({ course, userId, subscribedAt }: { course: CourseIn
       .finally(() => setLoading(false));
   }, [course.courseId, userId]);
 
-  const completedCodes = new Set(progress.map((p) => p.videoCode));
-
-  const toggleWeek = (id: string) =>
-    setExpandedWeeks((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-
-  const toggleVideo = useCallback(async (code: string) => {
-    if (toggling.has(code)) return;
-    setToggling((s) => new Set(s).add(code));
-    const wasDone = completedCodes.has(code);
+  const handleTrackingTypesChange = useCallback(async (types: TrackType[]) => {
+    setTrackingTypes(types);
+    setSavingTypes(true);
     try {
-      if (wasDone) {
-        await apiFetch("/api/progress", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ courseId: course.courseId, videoCode: code }),
-        });
-        setProgress((p) => p.filter((x) => x.videoCode !== code));
-      } else {
-        await apiFetch("/api/progress", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ courseId: course.courseId, videoCode: code }),
-        });
-        setProgress((p) => [
-          ...p,
-          { userId, courseId: course.courseId, videoCode: code, completedAt: new Date().toISOString() },
-        ]);
-      }
+      await apiFetch(`/api/subscriptions/${course.courseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trackingTypes: types }),
+      });
     } catch {}
-    setToggling((s) => { const n = new Set(s); n.delete(code); return n; });
-  }, [completedCodes, toggling, course.courseId, userId]);
+    setSavingTypes(false);
+  }, [course.courseId]);
 
+  // Per-type counts
   const totalVideos = data.weeks.reduce((s, w) => s + w.videos.length, 0);
-  const totalCompleted = progress.length;
-  const pct = totalVideos > 0 ? Math.round((totalCompleted / totalVideos) * 100) : 0;
+  const totalConcepts = course.totalConcepts;
+  const totalNotes = course.totalNotes;
+
+  const videoDone   = progress.filter((p) => p.videoCode.startsWith("v:")).length;
+  const conceptDone = progress.filter((p) => !p.videoCode.startsWith("v:") && !p.videoCode.startsWith("note:")).length;
+  const noteDone    = progress.filter((p) => p.videoCode.startsWith("note:")).length;
+
+  // Aggregate based on selected tracking types
+  let totalTracked = 0;
+  let totalDone = 0;
+  if (trackingTypes.includes("videos"))   { totalTracked += totalVideos;   totalDone += videoDone; }
+  if (trackingTypes.includes("concepts")) { totalTracked += totalConcepts; totalDone += conceptDone; }
+  if (trackingTypes.includes("notes"))    { totalTracked += totalNotes;    totalDone += noteDone; }
+
+  const pct = totalTracked > 0 ? Math.round((totalDone / totalTracked) * 100) : 0;
+
+  const unitLabel = trackingTypes.length === 1
+    ? TRACK_LABELS[trackingTypes[0]].label.toLowerCase().replace(/s$/, "")
+    : "item";
 
   return (
-    <div className="space-y-3">
-      {/* Course summary card */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <div className="flex items-start justify-between gap-4 mb-3">
-          <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{course.level} · {course.semester}</span>
-            </div>
-            <h3 className="font-semibold text-foreground text-sm leading-snug">{course.name}</h3>
+    <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
+            {course.level} · {course.semester}
           </div>
-          <button
-            onClick={() => navigate(`/${course.degreeSlug}/${course.courseId}`)}
-            className="flex-shrink-0 flex items-center gap-1 text-xs text-primary hover:underline"
-          >
-            <BookOpen className="w-3 h-3" />
-            Open
-          </button>
+          <h3 className="font-semibold text-foreground text-sm leading-snug">{course.name}</h3>
         </div>
+        <button
+          onClick={() => navigate(`/${course.degreeSlug}/${course.courseId}`)}
+          className="flex-shrink-0 flex items-center gap-1 text-xs text-primary hover:underline mt-0.5"
+        >
+          <BookOpen className="w-3 h-3" />
+          Open
+        </button>
+      </div>
 
-        {loading ? (
-          <div className="h-6 flex items-center">
-            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+      {/* Tracking type selector */}
+      <TrackingTypeChips
+        selected={trackingTypes}
+        onChange={handleTrackingTypesChange}
+        saving={savingTypes}
+      />
+
+      {/* Progress bar */}
+      {loading ? (
+        <div className="h-6 flex items-center">
+          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <>
+          <div>
+            <div className="flex items-center gap-3 mb-1.5">
+              <div className="flex-1 h-2.5 rounded-full bg-muted overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-primary transition-all duration-500"
+                  className={cn(
+                    "h-full rounded-full transition-all duration-500",
+                    pct === 100 ? "bg-green-500" : "bg-primary"
+                  )}
                   style={{ width: `${pct}%` }}
                 />
               </div>
-              <span className="text-xs font-mono font-semibold text-foreground flex-shrink-0">{totalCompleted}/{totalVideos}</span>
-              <span className="text-xs text-muted-foreground flex-shrink-0">{pct}%</span>
+              <span className="text-xs font-mono font-semibold text-foreground flex-shrink-0">{totalDone}/{totalTracked}</span>
+              <span className="text-xs text-muted-foreground flex-shrink-0 w-8 text-right">{pct}%</span>
             </div>
-            <TimelineSection subscribedAt={subscribedAt} progress={progress} totalVideos={totalVideos} />
-          </>
-        )}
-      </div>
 
-      {/* Per-week breakdown */}
-      {!loading && (
-        <div className="space-y-1.5">
-          {data.weeks.map((week) => {
-            const weekDone = week.videos.filter((v) => completedCodes.has(v.code)).length;
-            const weekPct = week.videos.length > 0 ? Math.round((weekDone / week.videos.length) * 100) : 0;
-            const expanded = expandedWeeks.has(week.id);
+            {/* Per-type stats */}
+            <div className="flex gap-3 flex-wrap">
+              {trackingTypes.includes("videos") && (
+                <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                  <Video className="w-3 h-3" />
+                  <span>{videoDone}/{totalVideos} videos</span>
+                </div>
+              )}
+              {trackingTypes.includes("concepts") && (
+                <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                  <Lightbulb className="w-3 h-3" />
+                  <span>{conceptDone}/{totalConcepts} concepts</span>
+                </div>
+              )}
+              {trackingTypes.includes("notes") && (
+                <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                  <FileText className="w-3 h-3" />
+                  <span>{noteDone}/{totalNotes} notes</span>
+                </div>
+              )}
+            </div>
+          </div>
 
-            return (
-              <div key={week.id} className="rounded-lg border border-border overflow-hidden">
-                <button
-                  onClick={() => toggleWeek(week.id)}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 bg-card hover:bg-muted/40 transition-colors text-left"
-                >
-                  {expanded ? (
-                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                  ) : (
-                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="text-xs font-medium text-foreground truncate">{week.label}</span>
-                      <span className="text-[10px] font-mono text-muted-foreground flex-shrink-0">{weekDone}/{week.videos.length}</span>
-                    </div>
-                    <div className="h-1 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className={cn("h-full rounded-full transition-all", weekPct === 100 ? "bg-green-500" : "bg-primary/60")}
-                        style={{ width: `${weekPct}%` }}
-                      />
-                    </div>
-                  </div>
-                </button>
-
-                {expanded && (
-                  <div className="border-t border-border divide-y divide-border/50">
-                    {week.videos.map((video) => {
-                      const done = completedCodes.has(video.code);
-                      const inFlight = toggling.has(video.code);
-                      return (
-                        <div key={video.code} className="flex items-center gap-3 px-4 py-2 bg-card/60">
-                          <button
-                            onClick={() => toggleVideo(video.code)}
-                            disabled={inFlight}
-                            className="flex-shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                            title={done ? "Mark incomplete" : "Mark complete"}
-                          >
-                            {inFlight ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : done ? (
-                              <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                            ) : (
-                              <Circle className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                          <span className={cn(
-                            "text-[10px] font-mono px-1 py-0.5 rounded bg-muted text-muted-foreground flex-shrink-0",
-                            done && "opacity-50"
-                          )}>
-                            {video.code}
-                          </span>
-                          <span className={cn(
-                            "text-xs flex-1 truncate",
-                            done ? "line-through text-muted-foreground" : "text-foreground"
-                          )}>
-                            {video.title}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+          <TimelineSection
+            subscribedAt={subscribedAt}
+            doneSoFar={totalDone}
+            totalItems={totalTracked}
+            unit={unitLabel}
+          />
+        </>
       )}
     </div>
   );
@@ -335,12 +360,18 @@ function ProgressTab({ userId }: { userId: string }) {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       {subscriptions.map((sub) => {
         const course = COURSE_REGISTRY[sub.courseId];
         if (!course) return null;
         return (
-          <CourseProgressCard key={sub.courseId} course={course} userId={userId} subscribedAt={sub.subscribedAt} />
+          <CourseProgressCard
+            key={sub.courseId}
+            course={course}
+            userId={userId}
+            subscribedAt={sub.subscribedAt}
+            initialTrackingTypes={sub.trackingTypes ?? ["videos", "concepts", "notes"]}
+          />
         );
       })}
     </div>
@@ -348,6 +379,29 @@ function ProgressTab({ userId }: { userId: string }) {
 }
 
 // ─── Profile Tab ─────────────────────────────────────────────────────────────
+
+function InfoRow({ icon, label, value, muted }: { icon: React.ReactNode; label: string; value: string; muted?: boolean }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="text-muted-foreground flex-shrink-0">{icon}</div>
+      <div className="min-w-0">
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
+        <div className={cn("text-sm font-medium truncate", muted && "text-muted-foreground")}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        {icon}{label}
+      </label>
+      {children}
+    </div>
+  );
+}
 
 function ProfileTab() {
   const { user, logout, updateUser } = useAuth();
@@ -516,7 +570,7 @@ function ProfileTab() {
             {pwError && <p className="text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">{pwError}</p>}
             <button type="submit" disabled={pwSaving} className="w-full h-9 flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-60 transition-colors">
               {pwSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-              {pwSaving ? "Updating…" : "Update password"}
+              {pwSaving ? "Saving…" : "Update password"}
             </button>
           </form>
         )}
@@ -525,111 +579,80 @@ function ProfileTab() {
       {/* Logout */}
       <button
         onClick={handleLogout}
-        className="w-full flex items-center justify-center gap-2 h-9 rounded-lg border border-destructive/40 text-destructive text-xs font-medium hover:bg-destructive/10 transition-colors"
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-destructive/30 text-destructive hover:bg-destructive/5 transition-colors text-sm font-medium"
       >
-        <LogOut className="w-3.5 h-3.5" />
+        <LogOut className="w-4 h-4" />
         Sign out
       </button>
     </div>
   );
 }
 
-function InfoRow({ icon, label, value, muted }: { icon: React.ReactNode; label: string; value: string; muted?: boolean }) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-muted-foreground">{icon}</span>
-      <span className="text-xs text-muted-foreground w-10 flex-shrink-0">{label}</span>
-      <span className={cn("text-sm font-medium", muted ? "text-muted-foreground" : "text-foreground")}>{value}</span>
-    </div>
-  );
-}
-
-function Field({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
-        {icon}{label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
 // ─── Dashboard Page ───────────────────────────────────────────────────────────
 
+type DashTab = "progress" | "profile";
+
 export function DashboardPage() {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"progress" | "profile">("progress");
+  const [tab, setTab] = useState<DashTab>("progress");
 
-  useEffect(() => {
-    if (!loading && !user) navigate("/login");
-  }, [loading, user, navigate]);
-
-  if (loading) {
+  if (!user) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      <div className="flex flex-col items-center justify-center h-full gap-4">
+        <p className="text-muted-foreground text-sm">You need to be signed in.</p>
+        <button onClick={() => navigate("/login")} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">
+          Sign in
+        </button>
       </div>
     );
   }
 
-  if (!user) return null;
-
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card px-4 py-3 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Link to="/" className="text-muted-foreground hover:text-foreground transition-colors">
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        {/* Back + header */}
+        <div className="flex items-center gap-3 mb-6">
+          <button
+            onClick={() => navigate(-1)}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground flex-shrink-0"
+          >
             <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <img src="/dytadex-logo.png" alt="DytaDex" className="h-7" />
-          <span className="text-sm font-semibold text-foreground hidden sm:block">Dashboard</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-base font-bold text-foreground leading-tight">Dashboard</h1>
+            <p className="text-xs text-muted-foreground truncate">{user.name}</p>
+          </div>
+          <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
             <span className="text-sm font-bold text-primary">{user.name.charAt(0).toUpperCase()}</span>
           </div>
-          <span className="text-sm font-medium text-foreground hidden sm:block">{user.name.split(" ")[0]}</span>
-        </div>
-      </header>
-
-      <div className="max-w-2xl mx-auto px-4 py-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground">Hello, {user.name.split(" ")[0]} 👋</h1>
-          <p className="text-sm text-muted-foreground mt-1">Track your learning progress and manage your account.</p>
         </div>
 
-        <div className="flex border-b border-border mb-6 gap-1">
-          <TabBtn active={tab === "progress"} onClick={() => setTab("progress")}>
-            <TrendingUp className="w-4 h-4" />
-            Progress
-          </TabBtn>
-          <TabBtn active={tab === "profile"} onClick={() => setTab("profile")}>
-            <User className="w-4 h-4" />
-            Profile
-          </TabBtn>
+        {/* Tab bar */}
+        <div className="flex gap-1 mb-5 border-b border-border">
+          {([
+            { id: "progress" as DashTab, label: "Progress", Icon: TrendingUp },
+            { id: "profile"  as DashTab, label: "Profile",  Icon: User },
+          ]).map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors",
+                tab === id
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+              )}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
         </div>
 
         {tab === "progress" && <ProgressTab userId={user.id} />}
-        {tab === "profile" && <ProfileTab />}
+        {tab === "profile"  && <ProfileTab />}
       </div>
     </div>
-  );
-}
-
-function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
-        active
-          ? "border-primary text-primary"
-          : "border-transparent text-muted-foreground hover:text-foreground"
-      )}
-    >
-      {children}
-    </button>
   );
 }

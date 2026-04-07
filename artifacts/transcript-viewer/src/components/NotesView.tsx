@@ -5,7 +5,7 @@ import remarkGfm from "remark-gfm";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { cn } from "@/lib/utils";
-import { ChevronRight, Search, X, Play, Pause, Square, Volume2, PlayCircle, Glasses } from "lucide-react";
+import { ChevronRight, Search, X, Play, Pause, Square, Volume2, PlayCircle, Glasses, CheckCircle2, Circle, Loader2 } from "lucide-react";
 import notesRaw from "@/data/maths2/notes.json";
 
 interface Note {
@@ -64,6 +64,9 @@ interface NotesViewProps {
   sidebarOpen: boolean;
   onSidebarClose: () => void;
   onNavigateToTranscript: (code: string, timestamp: string) => void;
+  completedCodes?: Set<string>;
+  togglingCodes?: Set<string>;
+  onToggleVideo?: (code: string) => void;
 }
 
 // Load voices, waiting for Chrome's async voiceschanged event if needed
@@ -77,7 +80,7 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
   });
 }
 
-export function NotesView({ sidebarOpen, onSidebarClose, onNavigateToTranscript }: NotesViewProps) {
+export function NotesView({ sidebarOpen, onSidebarClose, onNavigateToTranscript, completedCodes, togglingCodes, onToggleVideo }: NotesViewProps) {
   const [selectedId, setSelectedId] = useState<string>("1");
   const [searchQuery, setSearchQuery] = useState("");
   const [ttsState, setTtsState] = useState<"idle" | "playing" | "paused">("idle");
@@ -224,25 +227,55 @@ export function NotesView({ sidebarOpen, onSidebarClose, onNavigateToTranscript 
               <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                 {section}
               </div>
-              {sNotes.map((note) => (
-                <button
-                  key={note.id}
-                  onClick={() => handleSelectNote(note.id)}
-                  className={cn(
-                    "w-full text-left px-3 py-2 flex items-start gap-2 text-sm transition-colors rounded-none",
-                    selectedId === note.id
-                      ? "bg-primary/10 text-primary font-medium"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
-                  )}
-                >
-                  <span className="flex-shrink-0 text-[11px] font-mono mt-0.5 w-5 text-right opacity-50">
-                    {note.number}
-                  </span>
-                  <span className="leading-tight">
-                    {note.title.replace(/_/g, " ")}
-                  </span>
-                </button>
-              ))}
+              {sNotes.map((note) => {
+                const nKey = "note:" + note.id;
+                const isDone = completedCodes?.has(nKey) ?? false;
+                const isToggling = togglingCodes?.has(nKey) ?? false;
+                return (
+                  <div
+                    key={note.id}
+                    className={cn(
+                      "flex items-start transition-colors rounded-none",
+                      selectedId === note.id
+                        ? "bg-primary/10"
+                        : "hover:bg-muted/60"
+                    )}
+                  >
+                    {onToggleVideo && (
+                      <button
+                        onClick={() => onToggleVideo(nKey)}
+                        disabled={isToggling}
+                        className="flex-shrink-0 pt-2.5 pl-2 pr-0.5 text-muted-foreground hover:text-green-500 transition-colors"
+                        title={isDone ? "Mark incomplete" : "Mark complete"}
+                      >
+                        {isToggling ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : isDone ? (
+                          <CheckCircle2 className="w-3 h-3 text-green-500" />
+                        ) : (
+                          <Circle className="w-3 h-3" />
+                        )}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleSelectNote(note.id)}
+                      className={cn(
+                        "flex-1 text-left px-2 py-2 flex items-start gap-2 text-sm transition-colors rounded-none min-w-0",
+                        selectedId === note.id
+                          ? "text-primary font-medium"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <span className="flex-shrink-0 text-[11px] font-mono mt-0.5 w-5 text-right opacity-50">
+                        {note.number}
+                      </span>
+                      <span className={cn("leading-tight truncate", isDone && "line-through opacity-50")}>
+                        {note.title.replace(/_/g, " ")}
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           ))}
           {grouped.length === 0 && (

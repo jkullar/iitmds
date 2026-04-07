@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpen, ChevronDown, ChevronRight, GraduationCap, Video, AlertCircle } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, GraduationCap, Video, AlertCircle, CheckCircle2, Circle, Loader2 } from "lucide-react";
 import type { Week, Video as VideoType } from "@/types";
 import { cn } from "@/lib/utils";
 import curriculumData from "@/data/maths2/curriculum.json";
@@ -15,6 +15,9 @@ interface SidebarProps {
   selectedVideoId: string | null;
   onSelectVideo: (video: VideoType, week: Week) => void;
   searchQuery: string;
+  completedCodes?: Set<string>;
+  togglingCodes?: Set<string>;
+  onToggleVideo?: (code: string) => void;
 }
 
 const weekColors: Record<string, string> = {
@@ -41,7 +44,7 @@ function getVideoType(code: string): "L" | "T" | null {
 
 const WEEK_ORDER = ["refresher", "week1", "week2", "week3", "week4", "week5", "week6", "week7", "week8", "week9", "week10", "week11", "special"];
 
-export function Sidebar({ weeks, selectedVideoId, onSelectVideo, searchQuery }: SidebarProps) {
+export function Sidebar({ weeks, selectedVideoId, onSelectVideo, searchQuery, completedCodes, togglingCodes, onToggleVideo }: SidebarProps) {
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(() => {
     const initial = new Set<string>();
     const ordered = WEEK_ORDER.filter((k) => weeks.find((w) => w.key === k));
@@ -62,6 +65,8 @@ export function Sidebar({ weeks, selectedVideoId, onSelectVideo, searchQuery }: 
 
   const totalAvailable = weeks.reduce((sum, w) => sum + w.videos.filter((v) => v.available).length, 0);
 
+  const trackingEnabled = !!onToggleVideo;
+
   return (
     <nav className="h-full flex flex-col bg-sidebar text-sidebar-foreground">
       <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-sidebar-border flex-shrink-0">
@@ -77,11 +82,16 @@ export function Sidebar({ weeks, selectedVideoId, onSelectVideo, searchQuery }: 
       <div className="flex-1 overflow-y-auto scrollbar-thin py-1.5">
         {orderedWeeks.map((week) => {
           const isExpanded = expandedWeeks.has(week.key);
-          const availableCount = week.videos.filter((v) => v.available).length;
           const colorClass = weekColors[week.key] ?? "bg-gray-500";
           const theme = weekThemes[week.key];
           const lectures = week.videos.filter((v) => /_L\d+$/.test(v.code));
           const tutorials = week.videos.filter((v) => /_T\d+$/.test(v.code));
+
+          const weekDone = trackingEnabled && completedCodes
+            ? week.videos.filter((v) => completedCodes.has("v:" + v.code)).length
+            : 0;
+          const weekTotal = week.videos.length;
+          const weekAllDone = trackingEnabled && weekDone === weekTotal && weekTotal > 0;
 
           return (
             <div key={week.key}>
@@ -89,7 +99,10 @@ export function Sidebar({ weeks, selectedVideoId, onSelectVideo, searchQuery }: 
                 onClick={() => toggleWeek(week.key)}
                 className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-sidebar-accent transition-colors group"
               >
-                <span className={cn("w-2 h-2 rounded-full flex-shrink-0 mt-0.5", colorClass)} />
+                <span className={cn(
+                  "w-2 h-2 rounded-full flex-shrink-0 mt-0.5",
+                  weekAllDone ? "bg-green-500" : colorClass
+                )} />
                 <div className="flex-1 min-w-0 text-left">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-semibold text-sidebar-foreground/90 truncate leading-tight">
@@ -107,6 +120,14 @@ export function Sidebar({ weeks, selectedVideoId, onSelectVideo, searchQuery }: 
                     </span>
                   )}
                 </div>
+                {trackingEnabled && completedCodes && (
+                  <span className={cn(
+                    "text-[9px] font-mono flex-shrink-0",
+                    weekAllDone ? "text-green-500" : "text-sidebar-foreground/35"
+                  )}>
+                    {weekDone}/{weekTotal}
+                  </span>
+                )}
                 {isExpanded ? (
                   <ChevronDown className="w-3.5 h-3.5 text-sidebar-foreground/40 flex-shrink-0" />
                 ) : (
@@ -119,40 +140,76 @@ export function Sidebar({ weeks, selectedVideoId, onSelectVideo, searchQuery }: 
                   {week.videos.map((video) => {
                     const isSelected = video.id === selectedVideoId;
                     const vtype = getVideoType(video.code);
+                    const vKey = "v:" + video.code;
+                    const isDone = completedCodes?.has(vKey) ?? false;
+                    const isToggling = togglingCodes?.has(vKey) ?? false;
+
                     return (
-                      <button
+                      <div
                         key={video.id}
-                        onClick={() => onSelectVideo(video, week)}
                         className={cn(
-                          "w-full flex items-center gap-2 pl-6 pr-3 py-1.5 transition-colors text-left group",
+                          "flex items-center gap-1 pl-4 pr-2 transition-colors",
                           isSelected
-                            ? "bg-sidebar-primary/20 text-sidebar-primary"
-                            : "hover:bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                            ? "bg-sidebar-primary/20"
+                            : "hover:bg-sidebar-accent"
                         )}
                       >
-                        <span className="flex-shrink-0">
-                          {video.available ? (
-                            <Video className="w-2.5 h-2.5 opacity-50" />
-                          ) : (
-                            <AlertCircle className="w-2.5 h-2.5 text-destructive/60" />
-                          )}
-                        </span>
-
-                        {vtype && (
-                          <span className={cn(
-                            "text-[9px] font-bold px-1 py-0.5 rounded flex-shrink-0 leading-none",
-                            vtype === "L"
-                              ? "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
-                              : "bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400"
-                          )}>
-                            {vtype}
-                          </span>
+                        {trackingEnabled && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onToggleVideo!(vKey);
+                            }}
+                            disabled={isToggling}
+                            className="flex-shrink-0 p-0.5 text-sidebar-foreground/40 hover:text-green-500 transition-colors"
+                            title={isDone ? "Mark incomplete" : "Mark complete"}
+                          >
+                            {isToggling ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : isDone ? (
+                              <CheckCircle2 className="w-3 h-3 text-green-500" />
+                            ) : (
+                              <Circle className="w-3 h-3" />
+                            )}
+                          </button>
                         )}
 
-                        <span className="text-[11px] leading-snug truncate font-medium flex-1 min-w-0">
-                          {video.title}
-                        </span>
-                      </button>
+                        <button
+                          onClick={() => onSelectVideo(video, week)}
+                          className={cn(
+                            "flex-1 flex items-center gap-2 py-1.5 text-left min-w-0",
+                            isSelected
+                              ? "text-sidebar-primary"
+                              : "text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                          )}
+                        >
+                          <span className="flex-shrink-0">
+                            {video.available ? (
+                              <Video className="w-2.5 h-2.5 opacity-50" />
+                            ) : (
+                              <AlertCircle className="w-2.5 h-2.5 text-destructive/60" />
+                            )}
+                          </span>
+
+                          {vtype && (
+                            <span className={cn(
+                              "text-[9px] font-bold px-1 py-0.5 rounded flex-shrink-0 leading-none",
+                              vtype === "L"
+                                ? "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
+                                : "bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400"
+                            )}>
+                              {vtype}
+                            </span>
+                          )}
+
+                          <span className={cn(
+                            "text-[11px] leading-snug truncate font-medium flex-1 min-w-0",
+                            isDone && "line-through opacity-50"
+                          )}>
+                            {video.title}
+                          </span>
+                        </button>
+                      </div>
                     );
                   })}
                 </div>

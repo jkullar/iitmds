@@ -1,4 +1,4 @@
-import { pgTable, text, boolean, timestamp, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, timestamp, uuid, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -40,6 +40,10 @@ export const courseSubscriptionsTable = pgTable("course_subscriptions", {
   courseId: text("course_id").notNull(),
   degreeId: text("degree_id").notNull(),
   subscribedAt: timestamp("subscribed_at").notNull().defaultNow(),
+  trackingTypes: jsonb("tracking_types")
+    .$type<string[]>()
+    .notNull()
+    .default(["videos", "concepts", "notes"]),
 });
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({

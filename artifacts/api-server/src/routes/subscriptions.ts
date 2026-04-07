@@ -48,6 +48,37 @@ router.post("/subscriptions", requireAuth as any, async (req: AuthRequest, res) 
   res.status(201).json({ subscribed: true, subscription: row });
 });
 
+// PATCH /api/subscriptions/:courseId — update tracking types
+router.patch("/subscriptions/:courseId", requireAuth as any, async (req: AuthRequest, res) => {
+  const { courseId } = req.params;
+  const { trackingTypes } = req.body ?? {};
+
+  if (!Array.isArray(trackingTypes)) {
+    res.status(400).json({ error: "trackingTypes must be an array" });
+    return;
+  }
+  const valid = ["videos", "concepts", "notes"];
+  const filtered = trackingTypes.filter((t: string) => valid.includes(t));
+
+  const [updated] = await db
+    .update(courseSubscriptionsTable)
+    .set({ trackingTypes: filtered })
+    .where(
+      and(
+        eq(courseSubscriptionsTable.userId, req.userId!),
+        eq(courseSubscriptionsTable.courseId, courseId)
+      )
+    )
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Subscription not found" });
+    return;
+  }
+
+  res.json({ updated: true, trackingTypes: updated.trackingTypes });
+});
+
 // DELETE /api/subscriptions — unsubscribe from a course
 // body: { courseId }
 router.delete("/subscriptions", requireAuth as any, async (req: AuthRequest, res) => {

@@ -614,6 +614,9 @@ function App() {
                   selectedVideoId={selectedVideo?.id ?? null}
                   onSelectVideo={handleSelectVideo}
                   searchQuery={searchQuery}
+                  completedCodes={user ? progressCodes : undefined}
+                  togglingCodes={togglingCodes}
+                  onToggleVideo={user ? toggleProgress : undefined}
                 />
               </aside>
             )}
@@ -671,6 +674,9 @@ function App() {
                   sidebarOpen={sidebarOpen}
                   onSidebarClose={() => setSidebarOpen(false)}
                   onNavigateToTranscript={handleNavigateToTranscript}
+                  completedCodes={user ? progressCodes : undefined}
+                  togglingCodes={togglingCodes}
+                  onToggleVideo={user ? toggleProgress : undefined}
                 />
               )}
             </main>
