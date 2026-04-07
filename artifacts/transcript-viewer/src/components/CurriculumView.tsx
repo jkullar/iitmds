@@ -72,9 +72,10 @@ function ConceptCard({
   const [practiceOpen, setPracticeOpen] = useState(false);
   const colorClass = weekColors[weekKey] ?? weekColors.week1;
 
-  const videoCode = concept.introduced_in.code;
-  const isDone = completedCodes?.has(videoCode) ?? false;
-  const isToggling = togglingCodes?.has(videoCode) ?? false;
+  // Use concept name as the unique key (video code is shared across concepts)
+  const conceptKey = concept.name;
+  const isDone = completedCodes?.has(conceptKey) ?? false;
+  const isToggling = togglingCodes?.has(conceptKey) ?? false;
 
   return (
     <div className={cn(
@@ -87,7 +88,7 @@ function ConceptCard({
             {/* Check/uncomplete button */}
             {onToggleVideo && (
               <button
-                onClick={(e) => { e.stopPropagation(); onToggleVideo(videoCode); }}
+                onClick={(e) => { e.stopPropagation(); onToggleVideo(conceptKey); }}
                 disabled={isToggling}
                 className="flex-shrink-0 text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
                 title={isDone ? "Mark incomplete" : "Mark complete"}
@@ -213,7 +214,7 @@ function WeekSection({
   const dotColor = weekDotColors[week.week] ?? "bg-gray-500";
   const practiceCount = concepts.reduce((s, c) => s + c.practiced_in.length, 0);
   const doneInWeek = completedCodes
-    ? concepts.filter((c) => completedCodes.has(c.introduced_in.code)).length
+    ? concepts.filter((c) => completedCodes.has(c.name)).length
     : null;
 
   return (
@@ -248,7 +249,7 @@ function WeekSection({
           )}
         </div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+      <div className="grid gap-2 grid-cols-2">
         {concepts.map((concept) => (
           <ConceptCard
             key={concept.name}
@@ -326,6 +327,15 @@ export function CurriculumView({
 
   const totalShown = filteredWeeks.reduce((s, w) => s + w.concepts.length, 0);
 
+  // Count only actual concept completions (concept names), not mixed video codes
+  const conceptDoneCount = useMemo(() => {
+    if (!completedCodes) return null;
+    return sortedWeeks.reduce(
+      (s, w) => s + w.concepts.filter((c) => completedCodes.has(c.name)).length,
+      0
+    );
+  }, [completedCodes, sortedWeeks]);
+
   const handleSelectWeek = (weekKey: string | null) => {
     setSelectedWeek(weekKey);
     onSidebarClose();
@@ -380,9 +390,9 @@ export function CurriculumView({
           >
             <GraduationCap className="w-3.5 h-3.5 flex-shrink-0" />
             <span className="flex-1 leading-tight">All weeks</span>
-            {completedCodes ? (
+            {conceptDoneCount !== null ? (
               <span className="text-[10px] tabular-nums font-medium text-green-600 dark:text-green-400">
-                {completedCodes.size}/{curriculum.total_concepts}
+                {conceptDoneCount}/{curriculum.total_concepts}
               </span>
             ) : (
               <span className="text-[10px] tabular-nums opacity-60">{curriculum.total_concepts}</span>
@@ -394,7 +404,7 @@ export function CurriculumView({
           {sortedWeeks.map((w) => {
             const dot = weekDotColors[w.week] ?? "bg-gray-500";
             const weekDone = completedCodes
-              ? w.concepts.filter((c) => completedCodes.has(c.introduced_in.code)).length
+              ? w.concepts.filter((c) => completedCodes.has(c.name)).length
               : null;
             const allDone = weekDone !== null && weekDone === w.concepts.length;
             return (
