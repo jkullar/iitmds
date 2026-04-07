@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { ExternalLink, BookOpen, FlaskConical, ChevronDown, ChevronRight, GraduationCap, Search, X, Star } from "lucide-react";
 import curriculumData from "@/data/maths2/curriculum.json";
 import type { CurriculumData, CurriculumConcept, CurriculumWeek } from "@/types";
@@ -10,6 +10,8 @@ interface CurriculumViewProps {
   onNavigateToTranscript: (code: string, timestamp: string) => void;
   sidebarOpen: boolean;
   onSidebarClose: () => void;
+  scrollRestorePos?: number;
+  onScrollSave?: (pos: number) => void;
 }
 
 const WEEK_ORDER = [
@@ -206,9 +208,26 @@ function WeekSection({
   );
 }
 
-export function CurriculumView({ onNavigateToTranscript, sidebarOpen, onSidebarClose }: CurriculumViewProps) {
+export function CurriculumView({ onNavigateToTranscript, sidebarOpen, onSidebarClose, scrollRestorePos, onScrollSave }: CurriculumViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Restore scroll position when returning from transcript (runs only on mount)
+  useEffect(() => {
+    if (scrollRestorePos && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollRestorePos;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Capture scroll position just before jumping to a transcript
+  const handleNavigate = useCallback((code: string, timestamp: string) => {
+    if (onScrollSave && scrollContainerRef.current) {
+      onScrollSave(scrollContainerRef.current.scrollTop);
+    }
+    onNavigateToTranscript(code, timestamp);
+  }, [onNavigateToTranscript, onScrollSave]);
 
   const sortedWeeks = useMemo(
     () =>
@@ -332,7 +351,7 @@ export function CurriculumView({ onNavigateToTranscript, sidebarOpen, onSidebarC
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4">
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4">
           {filteredWeeks.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 gap-2 text-center">
               <p className="text-sm font-medium text-foreground">No concepts match</p>
@@ -344,7 +363,7 @@ export function CurriculumView({ onNavigateToTranscript, sidebarOpen, onSidebarC
                 key={week.week}
                 week={week}
                 concepts={concepts}
-                onNavigate={onNavigateToTranscript}
+                onNavigate={handleNavigate}
               />
             ))
           )}

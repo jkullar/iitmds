@@ -55,6 +55,7 @@ function App() {
   const [selectedWeek, setSelectedWeek] = useState<Week | null>(null);
   const [highlightSegmentIndex, setHighlightSegmentIndex] = useState<number | null>(null);
   const [sourceTab, setSourceTab] = useState<"curriculum" | "notes" | null>(null);
+  const curriculumScrollPosRef = useRef<number>(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const expandedInputRef = useRef<HTMLInputElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -359,7 +360,13 @@ function App() {
             {COURSE_TABS.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
-                onClick={() => { setCourseTab(id); setSidebarOpen(false); setSourceTab(null); }}
+                onClick={() => {
+                  // Fresh manual navigation to Curriculum always starts at top
+                  if (id === "curriculum") curriculumScrollPosRef.current = 0;
+                  setCourseTab(id);
+                  setSidebarOpen(false);
+                  setSourceTab(null);
+                }}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 -mb-px",
                   courseTab === id
@@ -484,6 +491,8 @@ function App() {
                   onNavigateToTranscript={handleNavigateToTranscript}
                   sidebarOpen={sidebarOpen}
                   onSidebarClose={() => setSidebarOpen(false)}
+                  scrollRestorePos={curriculumScrollPosRef.current}
+                  onScrollSave={(pos) => { curriculumScrollPosRef.current = pos; }}
                 />
               )}
               {courseTab === "notes" && (
