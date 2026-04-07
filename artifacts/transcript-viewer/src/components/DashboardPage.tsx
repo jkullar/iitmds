@@ -35,33 +35,36 @@ async function apiFetch(path: string, opts?: RequestInit) {
 }
 
 // ─── Timeline prediction ──────────────────────────────────────────────────────
+// effectiveFraction: 0–1 weighted completion across selected types
 type TimelineResult =
   | { status: "done" }
   | { status: "not_started" }
-  | { status: "in_progress"; ratePerDay: number; daysLeft: number; completionDate: Date };
+  | { status: "in_progress"; pctPerDay: number; daysLeft: number; completionDate: Date };
 
-function computeTimeline(subscribedAt: string, doneSoFar: number, totalItems: number): TimelineResult {
-  const remaining = totalItems - doneSoFar;
-  if (remaining <= 0 && totalItems > 0) return { status: "done" };
-  if (doneSoFar === 0) return { status: "not_started" };
+function computeTimeline(subscribedAt: string, effectiveFraction: number): TimelineResult {
+  if (effectiveFraction >= 1) return { status: "done" };
+  if (effectiveFraction <= 0) return { status: "not_started" };
 
   const now = Date.now();
   const start = new Date(subscribedAt).getTime();
   const daysElapsed = Math.max(1, (now - start) / 86_400_000);
-  const ratePerDay = doneSoFar / daysElapsed;
+  const ratePerDay = effectiveFraction / daysElapsed;
+  const remaining = 1 - effectiveFraction;
   const daysLeft = Math.round(remaining / ratePerDay);
   const completionDate = new Date(now + daysLeft * 86_400_000);
-  return { status: "in_progress", ratePerDay, daysLeft, completionDate };
+  // pctPerDay: how many percentage points of the course per day
+  const pctPerDay = ratePerDay * 100;
+  return { status: "in_progress", pctPerDay, daysLeft, completionDate };
 }
 
 function formatDate(d: Date) {
   return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function TimelineSection({ subscribedAt, doneSoFar, totalItems, unit }: {
-  subscribedAt: string; doneSoFar: number; totalItems: number; unit: string;
+function TimelineSection({ subscribedAt, effectiveFraction }: {
+  subscribedAt: string; effectiveFraction: number;
 }) {
-  const tl = computeTimeline(subscribedAt, doneSoFar, totalItems);
+  const tl = computeTimeline(subscribedAt, effectiveFraction);
 
   if (tl.status === "done") {
     return (
@@ -76,15 +79,15 @@ function TimelineSection({ subscribedAt, doneSoFar, totalItems, unit }: {
     return (
       <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/60 border border-border/50 text-muted-foreground">
         <CalendarClock className="w-3.5 h-3.5 flex-shrink-0" />
-        <span className="text-xs">Mark your first {unit} to see your projected finish date.</span>
+        <span className="text-xs">Mark your first item to see your projected finish date.</span>
       </div>
     );
   }
 
-  const { ratePerDay, daysLeft, completionDate } = tl;
-  const rateLabel = ratePerDay >= 1
-    ? `${ratePerDay.toFixed(1)} ${unit}/day`
-    : `${Math.round(7 * ratePerDay * 10) / 10} ${unit}/week`;
+  const { pctPerDay, daysLeft, completionDate } = tl;
+  const rateLabel = pctPerDay >= 1
+    ? `${pctPerDay.toFixed(1)}%/day`
+    : `${(pctPerDay * 7).toFixed(1)}%/week`;
   const timeLabel = daysLeft > 365
     ? `~${Math.round(daysLeft / 30)} months`
     : daysLeft > 60
@@ -218,18 +221,18 @@ function CourseProgressCard({
   const conceptDone = progress.filter((p) => !p.videoCode.startsWith("v:") && !p.videoCode.startsWith("note:")).length;
   const noteDone    = progress.filter((p) => p.videoCode.startsWith("note:")).length;
 
-  // Aggregate based on selected tracking types
-  let totalTracked = 0;
-  let totalDone = 0;
-  if (trackingTypes.includes("videos"))   { totalTracked += totalVideos;   totalDone += videoDone; }
-  if (trackingTypes.includes("concepts")) { totalTracked += totalConcepts; totalDone += conceptDone; }
-  if (trackingTypes.includes("notes"))    { totalTracked += totalNotes;    totalDone += noteDone; }
+  // Equal-weight: each selected type contributes 1/N to overall completion
+  // fraction = average of (done_i / total_i) across selected types
+  const fractions: number[] = [];
+  if (trackingTypes.includes("videos")   && totalVideos   > 0) fractions.push(videoDone   / totalVideos);
+  if (trackingTypes.includes("concepts") && totalConcepts > 0) fractions.push(conceptDone / totalConcepts);
+  if (trackingTypes.includes("notes")    && totalNotes    > 0) fractions.push(noteDone    / totalNotes);
 
-  const pct = totalTracked > 0 ? Math.round((totalDone / totalTracked) * 100) : 0;
+  const effectiveFraction = fractions.length > 0
+    ? fractions.reduce((s, f) => s + f, 0) / fractions.length
+    : 0;
 
-  const unitLabel = trackingTypes.length === 1
-    ? TRACK_LABELS[trackingTypes[0]].label.toLowerCase().replace(/s$/, "")
-    : "item";
+  const pct = Math.round(effectiveFraction * 100);
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 space-y-4">
@@ -265,7 +268,8 @@ function CourseProgressCard({
       ) : (
         <>
           <div>
-            <div className="flex items-center gap-3 mb-1.5">
+            {/* Overall progress bar */}
+            <div className="flex items-center gap-3 mb-2.5">
               <div className="flex-1 h-2.5 rounded-full bg-muted overflow-hidden">
                 <div
                   className={cn(
@@ -275,28 +279,51 @@ function CourseProgressCard({
                   style={{ width: `${pct}%` }}
                 />
               </div>
-              <span className="text-xs font-mono font-semibold text-foreground flex-shrink-0">{totalDone}/{totalTracked}</span>
-              <span className="text-xs text-muted-foreground flex-shrink-0 w-8 text-right">{pct}%</span>
+              <span className="text-sm font-bold text-foreground flex-shrink-0 w-10 text-right">{pct}%</span>
             </div>
 
-            {/* Per-type stats */}
-            <div className="flex gap-3 flex-wrap">
+            {/* Per-type mini bars — each contributes equally */}
+            <div className="space-y-1.5">
               {trackingTypes.includes("videos") && (
-                <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                  <Video className="w-3 h-3" />
-                  <span>{videoDone}/{totalVideos} videos</span>
+                <div className="flex items-center gap-2">
+                  <Video className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                      style={{ width: `${totalVideos > 0 ? Math.round(videoDone / totalVideos * 100) : 0}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono text-muted-foreground flex-shrink-0 w-16 text-right">
+                    {videoDone}/{totalVideos}
+                  </span>
                 </div>
               )}
               {trackingTypes.includes("concepts") && (
-                <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                  <Lightbulb className="w-3 h-3" />
-                  <span>{conceptDone}/{totalConcepts} concepts</span>
+                <div className="flex items-center gap-2">
+                  <Lightbulb className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-violet-500 transition-all duration-500"
+                      style={{ width: `${totalConcepts > 0 ? Math.round(conceptDone / totalConcepts * 100) : 0}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono text-muted-foreground flex-shrink-0 w-16 text-right">
+                    {conceptDone}/{totalConcepts}
+                  </span>
                 </div>
               )}
               {trackingTypes.includes("notes") && (
-                <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                  <FileText className="w-3 h-3" />
-                  <span>{noteDone}/{totalNotes} notes</span>
+                <div className="flex items-center gap-2">
+                  <FileText className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-amber-500 transition-all duration-500"
+                      style={{ width: `${totalNotes > 0 ? Math.round(noteDone / totalNotes * 100) : 0}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono text-muted-foreground flex-shrink-0 w-16 text-right">
+                    {noteDone}/{totalNotes}
+                  </span>
                 </div>
               )}
             </div>
@@ -304,9 +331,7 @@ function CourseProgressCard({
 
           <TimelineSection
             subscribedAt={subscribedAt}
-            doneSoFar={totalDone}
-            totalItems={totalTracked}
-            unit={unitLabel}
+            effectiveFraction={effectiveFraction}
           />
         </>
       )}
