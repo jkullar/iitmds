@@ -5,6 +5,7 @@ import {
   User, Phone, Mail, Lock, LogOut, BookOpen, CheckCircle2,
   Circle, ChevronDown, ChevronRight, Edit3, Check, X, Loader2,
   ArrowLeft, Eye, EyeOff, TrendingUp, BookMarked, GraduationCap,
+  CalendarClock, Zap, Trophy,
 } from "lucide-react";
 import { COURSE_REGISTRY, type CourseInfo } from "@/lib/courseRegistry";
 import type { TranscriptsData } from "@/types";
@@ -32,9 +33,87 @@ async function apiFetch(path: string, opts?: RequestInit) {
   return body;
 }
 
+// ─── Timeline prediction ──────────────────────────────────────────────────────
+type TimelineResult =
+  | { status: "done" }
+  | { status: "not_started" }
+  | { status: "in_progress"; ratePerDay: number; daysLeft: number; completionDate: Date };
+
+function computeTimeline(subscribedAt: string, progress: ProgressItem[], totalVideos: number): TimelineResult {
+  const completed = progress.length;
+  const remaining = totalVideos - completed;
+  if (remaining === 0) return { status: "done" };
+  if (completed === 0) return { status: "not_started" };
+
+  const now = Date.now();
+  const start = new Date(subscribedAt).getTime();
+  const daysElapsed = Math.max(1, (now - start) / 86_400_000);
+  const ratePerDay = completed / daysElapsed;
+  const daysLeft = Math.round(remaining / ratePerDay);
+  const completionDate = new Date(now + daysLeft * 86_400_000);
+  return { status: "in_progress", ratePerDay, daysLeft, completionDate };
+}
+
+function formatDate(d: Date) {
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function TimelineSection({ subscribedAt, progress, totalVideos }: {
+  subscribedAt: string; progress: ProgressItem[]; totalVideos: number;
+}) {
+  const tl = computeTimeline(subscribedAt, progress, totalVideos);
+
+  if (tl.status === "done") {
+    return (
+      <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/25 text-green-700 dark:text-green-400">
+        <Trophy className="w-3.5 h-3.5 flex-shrink-0" />
+        <span className="text-xs font-medium">Course complete! 🎉</span>
+      </div>
+    );
+  }
+
+  if (tl.status === "not_started") {
+    return (
+      <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/60 border border-border/50 text-muted-foreground">
+        <CalendarClock className="w-3.5 h-3.5 flex-shrink-0" />
+        <span className="text-xs">Complete your first video to see your projected finish date.</span>
+      </div>
+    );
+  }
+
+  const { ratePerDay, daysLeft, completionDate } = tl;
+  const rateLabel = ratePerDay >= 1
+    ? `${ratePerDay.toFixed(1)} videos/day`
+    : `${Math.round(7 * ratePerDay * 10) / 10} videos/week`;
+  const timeLabel = daysLeft > 365
+    ? `~${Math.round(daysLeft / 30)} months`
+    : daysLeft > 60
+    ? `~${Math.round(daysLeft / 7)} weeks`
+    : `~${daysLeft} day${daysLeft !== 1 ? "s" : ""}`;
+
+  return (
+    <div className="mt-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5 space-y-1.5">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Zap className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+          <span>Pace: <span className="font-medium text-foreground">{rateLabel}</span></span>
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <CalendarClock className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+          <span>Finish in <span className="font-medium text-foreground">{timeLabel}</span></span>
+        </div>
+      </div>
+      <div className="text-xs text-muted-foreground">
+        Projected completion: <span className="font-semibold text-foreground">{formatDate(completionDate)}</span>
+        <span className="ml-1.5 text-muted-foreground/70 italic text-[10px]">(adjusts as you learn faster)</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Single Course Progress Card ─────────────────────────────────────────────
 
-function CourseProgressCard({ course, userId }: { course: CourseInfo; userId: string }) {
+function CourseProgressCard({ course, userId, subscribedAt }: { course: CourseInfo; userId: string; subscribedAt: string }) {
   const navigate = useNavigate();
   const data = course.transcripts as TranscriptsData;
   const [progress, setProgress] = useState<ProgressItem[]>([]);
@@ -114,16 +193,19 @@ function CourseProgressCard({ course, userId }: { course: CourseInfo; userId: st
             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-500"
-                style={{ width: `${pct}%` }}
-              />
+          <>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-500"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <span className="text-xs font-mono font-semibold text-foreground flex-shrink-0">{totalCompleted}/{totalVideos}</span>
+              <span className="text-xs text-muted-foreground flex-shrink-0">{pct}%</span>
             </div>
-            <span className="text-xs font-mono font-semibold text-foreground flex-shrink-0">{totalCompleted}/{totalVideos}</span>
-            <span className="text-xs text-muted-foreground flex-shrink-0">{pct}%</span>
-          </div>
+            <TimelineSection subscribedAt={subscribedAt} progress={progress} totalVideos={totalVideos} />
+          </>
         )}
       </div>
 
@@ -258,7 +340,7 @@ function ProgressTab({ userId }: { userId: string }) {
         const course = COURSE_REGISTRY[sub.courseId];
         if (!course) return null;
         return (
-          <CourseProgressCard key={sub.courseId} course={course} userId={userId} />
+          <CourseProgressCard key={sub.courseId} course={course} userId={userId} subscribedAt={sub.subscribedAt} />
         );
       })}
     </div>

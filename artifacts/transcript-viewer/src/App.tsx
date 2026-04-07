@@ -124,9 +124,13 @@ function App() {
   const expandedInputRef = useRef<HTMLInputElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ─── Subscription state for the active course ─────────────────────────────
+  // ─── Subscription state ────────────────────────────────────────────────────
   const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
   const [subscriptionToggling, setSubscriptionToggling] = useState(false);
+
+  // ─── Progress state (shared with CurriculumView) ──────────────────────────
+  const [progressCodes, setProgressCodes] = useState<Set<string>>(new Set());
+  const [togglingCodes, setTogglingCodes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -171,6 +175,36 @@ function App() {
     } catch {}
     setSubscriptionToggling(false);
   }, [user, activeCourse, isSubscribed, subscriptionToggling, navigate]);
+
+  // Fetch progress for the active course (for CurriculumView checkmarks)
+  useEffect(() => {
+    if (!activeCourse || !user) { setProgressCodes(new Set()); return; }
+    fetch(`/api/progress?courseId=${activeCourse}`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => {
+        setProgressCodes(new Set((d.progress as { videoCode: string }[]).map((p) => p.videoCode)));
+      })
+      .catch(() => {});
+  }, [activeCourse, user]);
+
+  const toggleProgress = useCallback(async (code: string) => {
+    if (!user) { navigate("/login"); return; }
+    if (!activeCourse || togglingCodes.has(code)) return;
+    const wasDone = progressCodes.has(code);
+    setProgressCodes((prev) => { const n = new Set(prev); wasDone ? n.delete(code) : n.add(code); return n; });
+    setTogglingCodes((prev) => new Set(prev).add(code));
+    try {
+      await fetch("/api/progress", {
+        method: wasDone ? "DELETE" : "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courseId: activeCourse, videoCode: code }),
+      });
+    } catch {
+      setProgressCodes((prev) => { const n = new Set(prev); wasDone ? n.add(code) : n.delete(code); return n; });
+    }
+    setTogglingCodes((prev) => { const n = new Set(prev); n.delete(code); return n; });
+  }, [user, activeCourse, progressCodes, togglingCodes, navigate]);
 
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -627,6 +661,9 @@ function App() {
                   onSidebarClose={() => setSidebarOpen(false)}
                   scrollRestorePos={curriculumScrollPosRef.current}
                   onScrollSave={(pos) => { curriculumScrollPosRef.current = pos; }}
+                  completedCodes={user ? progressCodes : undefined}
+                  togglingCodes={togglingCodes}
+                  onToggleVideo={user ? toggleProgress : undefined}
                 />
               )}
               {courseTab === "notes" && (

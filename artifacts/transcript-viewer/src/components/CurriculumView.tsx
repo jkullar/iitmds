@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { ExternalLink, BookOpen, FlaskConical, ChevronDown, ChevronRight, GraduationCap, Search, X, Star } from "lucide-react";
+import { ExternalLink, BookOpen, FlaskConical, ChevronDown, ChevronRight, GraduationCap, Search, X, Star, CheckCircle2, Circle, Loader2 } from "lucide-react";
 import curriculumData from "@/data/maths2/curriculum.json";
 import type { CurriculumData, CurriculumConcept, CurriculumWeek } from "@/types";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,9 @@ interface CurriculumViewProps {
   onSidebarClose: () => void;
   scrollRestorePos?: number;
   onScrollSave?: (pos: number) => void;
+  completedCodes?: Set<string>;
+  togglingCodes?: Set<string>;
+  onToggleVideo?: (code: string) => void;
 }
 
 const WEEK_ORDER = [
@@ -55,20 +58,53 @@ function ConceptCard({
   concept,
   weekKey,
   onNavigate,
+  completedCodes,
+  togglingCodes,
+  onToggleVideo,
 }: {
   concept: CurriculumConcept;
   weekKey: string;
   onNavigate: (code: string, timestamp: string) => void;
+  completedCodes?: Set<string>;
+  togglingCodes?: Set<string>;
+  onToggleVideo?: (code: string) => void;
 }) {
   const [practiceOpen, setPracticeOpen] = useState(false);
   const colorClass = weekColors[weekKey] ?? weekColors.week1;
 
+  const videoCode = concept.introduced_in.code;
+  const isDone = completedCodes?.has(videoCode) ?? false;
+  const isToggling = togglingCodes?.has(videoCode) ?? false;
+
   return (
-    <div className="bg-card border border-card-border rounded-lg overflow-hidden">
+    <div className={cn(
+      "bg-card border rounded-lg overflow-hidden transition-colors",
+      isDone ? "border-green-500/40 bg-green-500/5 dark:bg-green-500/5" : "border-card-border"
+    )}>
       <div className="px-4 py-3">
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-            <h3 className="text-sm font-semibold text-foreground leading-snug">{concept.name}</h3>
+            {/* Check/uncomplete button */}
+            {onToggleVideo && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleVideo(videoCode); }}
+                disabled={isToggling}
+                className="flex-shrink-0 text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
+                title={isDone ? "Mark incomplete" : "Mark complete"}
+              >
+                {isToggling ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : isDone ? (
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Circle className="w-4 h-4" />
+                )}
+              </button>
+            )}
+            <h3 className={cn(
+              "text-sm font-semibold leading-snug transition-colors",
+              isDone ? "text-muted-foreground" : "text-foreground"
+            )}>{concept.name}</h3>
             {concept.is_prerequisite && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 flex-shrink-0">
                 <Star className="w-2.5 h-2.5" />
@@ -163,13 +199,22 @@ function WeekSection({
   week,
   concepts,
   onNavigate,
+  completedCodes,
+  togglingCodes,
+  onToggleVideo,
 }: {
   week: CurriculumWeek;
   concepts: CurriculumConcept[];
   onNavigate: (code: string, timestamp: string) => void;
+  completedCodes?: Set<string>;
+  togglingCodes?: Set<string>;
+  onToggleVideo?: (code: string) => void;
 }) {
   const dotColor = weekDotColors[week.week] ?? "bg-gray-500";
   const practiceCount = concepts.reduce((s, c) => s + c.practiced_in.length, 0);
+  const doneInWeek = completedCodes
+    ? concepts.filter((c) => completedCodes.has(c.introduced_in.code)).length
+    : null;
 
   return (
     <section className="mb-8">
@@ -182,6 +227,15 @@ function WeekSection({
           </h2>
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground flex-shrink-0">
+          {doneInWeek !== null && (
+            <span className={cn(
+              "flex items-center gap-1 font-mono font-medium",
+              doneInWeek === concepts.length ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
+            )}>
+              <CheckCircle2 className="w-3 h-3" />
+              {doneInWeek}/{concepts.length}
+            </span>
+          )}
           <span className="flex items-center gap-1">
             <BookOpen className="w-3 h-3" />
             {concepts.length} concepts
@@ -201,6 +255,9 @@ function WeekSection({
             concept={concept}
             weekKey={week.week}
             onNavigate={onNavigate}
+            completedCodes={completedCodes}
+            togglingCodes={togglingCodes}
+            onToggleVideo={onToggleVideo}
           />
         ))}
       </div>
@@ -208,7 +265,10 @@ function WeekSection({
   );
 }
 
-export function CurriculumView({ onNavigateToTranscript, sidebarOpen, onSidebarClose, scrollRestorePos, onScrollSave }: CurriculumViewProps) {
+export function CurriculumView({
+  onNavigateToTranscript, sidebarOpen, onSidebarClose, scrollRestorePos, onScrollSave,
+  completedCodes, togglingCodes, onToggleVideo,
+}: CurriculumViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -320,13 +380,23 @@ export function CurriculumView({ onNavigateToTranscript, sidebarOpen, onSidebarC
           >
             <GraduationCap className="w-3.5 h-3.5 flex-shrink-0" />
             <span className="flex-1 leading-tight">All weeks</span>
-            <span className="text-[10px] tabular-nums opacity-60">{curriculum.total_concepts}</span>
+            {completedCodes ? (
+              <span className="text-[10px] tabular-nums font-medium text-green-600 dark:text-green-400">
+                {completedCodes.size}/{curriculum.total_concepts}
+              </span>
+            ) : (
+              <span className="text-[10px] tabular-nums opacity-60">{curriculum.total_concepts}</span>
+            )}
           </button>
 
           <div className="my-1 mx-3 border-t border-border/50" />
 
           {sortedWeeks.map((w) => {
             const dot = weekDotColors[w.week] ?? "bg-gray-500";
+            const weekDone = completedCodes
+              ? w.concepts.filter((c) => completedCodes.has(c.introduced_in.code)).length
+              : null;
+            const allDone = weekDone !== null && weekDone === w.concepts.length;
             return (
               <button
                 key={w.week}
@@ -338,9 +408,22 @@ export function CurriculumView({ onNavigateToTranscript, sidebarOpen, onSidebarC
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
                 )}
               >
-                <span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
+                {allDone ? (
+                  <CheckCircle2 className="w-2.5 h-2.5 flex-shrink-0 text-green-500" />
+                ) : (
+                  <span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
+                )}
                 <span className="flex-1 leading-tight text-xs">{w.label}</span>
-                <span className="text-[10px] tabular-nums opacity-60">{w.concepts.length}</span>
+                {weekDone !== null ? (
+                  <span className={cn(
+                    "text-[10px] tabular-nums",
+                    allDone ? "text-green-600 dark:text-green-400 font-medium" : "opacity-60"
+                  )}>
+                    {weekDone}/{w.concepts.length}
+                  </span>
+                ) : (
+                  <span className="text-[10px] tabular-nums opacity-60">{w.concepts.length}</span>
+                )}
               </button>
             );
           })}
@@ -375,6 +458,9 @@ export function CurriculumView({ onNavigateToTranscript, sidebarOpen, onSidebarC
                 week={week}
                 concepts={concepts}
                 onNavigate={handleNavigate}
+                completedCodes={completedCodes}
+                togglingCodes={togglingCodes}
+                onToggleVideo={onToggleVideo}
               />
             ))
           )}
